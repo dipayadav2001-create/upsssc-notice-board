@@ -1,17 +1,16 @@
-name: UPSSSC Notice Board
+name: Government Job Notice Monitor
 
 on:
-  workflow_dispatch:
   schedule:
     - cron: "*/5 * * * *"
+  workflow_dispatch:
 
 jobs:
-  run-bot:
+  monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 4
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Python
@@ -19,12 +18,13 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install packages
+      - name: Install dependencies
         run: |
-          pip install python-telegram-bot requests beautifulsoup4
+          pip install requests beautifulsoup4 python-telegram-bot
 
-      - name: Run bot
+      - name: Run notice monitor
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          ADMIN_ID: "8549471800"
         run: |
-          timeout 210s python bot.py || true
+          python bot.py

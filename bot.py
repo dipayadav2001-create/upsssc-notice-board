@@ -14,8 +14,6 @@ SEEN_FILE = "seen.json"
 SOURCES = {
     "UPSSSC": "https://upsssc.gov.in/Default.aspx",
     "SSC": "https://ssc.gov.in/",
-    "UPSC": "https://www.upsc.gov.in/",
-    "UPPSC": "https://uppsc.up.nic.in/",
     "Sarkari Result": "https://www.sarkariresult.com/",
 }
 

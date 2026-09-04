@@ -1,511 +1,275 @@
 import os
-import json
-import hashlib
-import html
-import requests
-from bs4 import BeautifulSoup
-from urllib.parse import urljoin
-
-# =========================================================
-# CONFIGURATION
-# =========================================================
-
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_ID = os.getenv("ADMIN_ID")
-
-SEEN_FILE = "seen.json"
-
-# केवल ये 3 sources monitor होंगे
-SOURCES = {
-    "UPSSSC": "https://upsssc.gov.in/Default.aspx",
-    "SSC": "https://ssc.gov.in/",
-    "Sarkari Result": "https://www.sarkariresult.com/",
-}
-
-# =========================================================
-# KEYWORDS
-# =========================================================
-
-KEYWORDS = (
-    "notice",
-    "notification",
-    "advertisement",
-    "result",
-    "answer key",
-    "answerkey",
-    "admit card",
-    "admitcard",
-    "exam",
-    "recruitment",
-    "vacancy",
-    "important",
-    "corrigendum",
-    "final result",
-    "written result",
-    "marks",
-    "merit",
-    "syllabus",
-    "application",
-    "online form",
-    "response sheet",
-    "cut off",
-    "cutoff",
+import random
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    CallbackQueryHandler,
+    ContextTypes,
 )
 
-# =========================================================
-# CATEGORY DETECTION
-# =========================================================
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-def detect_category(text):
-    t = text.lower()
+QUESTIONS = [
+    {
+        "q": "भारत का संविधान कब लागू हुआ?",
+        "options": [
+            "15 अगस्त 1947",
+            "26 जनवरी 1950",
+            "26 नवंबर 1949",
+            "2 अक्टूबर 1950",
+        ],
+        "answer": 1,
+        "explanation": "भारतीय संविधान 26 जनवरी 1950 को लागू हुआ।",
+    },
+    {
+        "q": "भारत के संविधान का संरक्षक किसे माना जाता है?",
+        "options": [
+            "संसद",
+            "राष्ट्रपति",
+            "सर्वोच्च न्यायालय",
+            "प्रधानमंत्री",
+        ],
+        "answer": 2,
+        "explanation": "सर्वोच्च न्यायालय को संविधान का संरक्षक माना जाता है।",
+    },
+    {
+        "q": "उत्तर प्रदेश की राजधानी कौन-सी है?",
+        "options": [
+            "कानपुर",
+            "प्रयागराज",
+            "लखनऊ",
+            "वाराणसी",
+        ],
+        "answer": 2,
+        "explanation": "लखनऊ उत्तर प्रदेश की राजधानी है।",
+    },
+    {
+        "q": "भारतीय संविधान में वर्तमान में कितनी अनुसूचियाँ हैं?",
+        "options": [
+            "10",
+            "11",
+            "12",
+            "13",
+        ],
+        "answer": 2,
+        "explanation": "भारतीय संविधान में वर्तमान में 12 अनुसूचियाँ हैं।",
+    },
+    {
+        "q": "भारत का राष्ट्रीय पशु कौन है?",
+        "options": [
+            "सिंह",
+            "बाघ",
+            "हाथी",
+            "तेंदुआ",
+        ],
+        "answer": 1,
+        "explanation": "बाघ भारत का राष्ट्रीय पशु है।",
+    },
+    {
+        "q": "UPSSSC का पूरा नाम क्या है?",
+        "options": [
+            "Uttar Pradesh Staff Selection Commission",
+            "Uttar Pradesh Subordinate Services Selection Commission",
+            "Uttar Pradesh State Selection Commission",
+            "Uttar Pradesh Service Selection Council",
+        ],
+        "answer": 1,
+        "explanation": "UPSSSC का पूरा नाम Uttar Pradesh Subordinate Services Selection Commission है।",
+    },
+    {
+        "q": "SSC का पूरा नाम क्या है?",
+        "options": [
+            "Staff Selection Commission",
+            "State Selection Commission",
+            "Service Selection Council",
+            "Staff Service Commission",
+        ],
+        "answer": 0,
+        "explanation": "SSC का पूरा नाम Staff Selection Commission है।",
+    },
+    {
+        "q": "भारत में मतदान की न्यूनतम आयु कितनी है?",
+        "options": [
+            "16 वर्ष",
+            "18 वर्ष",
+            "21 वर्ष",
+            "25 वर्ष",
+        ],
+        "answer": 1,
+        "explanation": "भारत में मतदान की न्यूनतम आयु 18 वर्ष है।",
+    },
+    {
+        "q": "भारतीय संविधान का अनुच्छेद 14 किससे संबंधित है?",
+        "options": [
+            "स्वतंत्रता का अधिकार",
+            "समानता का अधिकार",
+            "शिक्षा का अधिकार",
+            "धार्मिक स्वतंत्रता",
+        ],
+        "answer": 1,
+        "explanation": "अनुच्छेद 14 कानून के समक्ष समानता और कानूनों के समान संरक्षण से संबंधित है।",
+    },
+    {
+        "q": "भारत का राष्ट्रीय खेल आधिकारिक रूप से कौन-सा है?",
+        "options": [
+            "हॉकी",
+            "क्रिकेट",
+            "कबड्डी",
+            "कोई आधिकारिक राष्ट्रीय खेल नहीं",
+        ],
+        "answer": 3,
+        "explanation": "भारत सरकार ने किसी खेल को आधिकारिक राष्ट्रीय खेल घोषित नहीं किया है।",
+    },
+]
 
-    if "answer key" in t or "answerkey" in t:
-        return "🔑 Answer Key"
 
-    if "admit card" in t or "admitcard" in t:
-        return "🎫 Admit Card"
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["score"] = 0
+    context.user_data["question_no"] = 0
+    context.user_data["questions"] = random.sample(QUESTIONS, min(5, len(QUESTIONS)))
 
-    if "final result" in t:
-        return "🏆 Final Result"
+    keyboard = [
+        [InlineKeyboardButton("🎯 Quiz शुरू करें", callback_data="start_quiz")]
+    ]
 
-    if "result" in t or "marks" in t or "merit" in t:
-        return "📊 Result"
-
-    if "advertisement" in t or "recruitment" in t or "vacancy" in t:
-        return "📢 Recruitment / Advertisement"
-
-    if "exam" in t or "syllabus" in t:
-        return "📝 Exam Update"
-
-    if "corrigendum" in t:
-        return "✏️ Corrigendum"
-
-    if "application" in t or "online form" in t:
-        return "📝 Application / Form"
-
-    if "important" in t or "notice" in t or "notification" in t:
-        return "⚠️ Important Notice"
-
-    return "📌 Government Job Update"
+    await update.message.reply_text(
+        "🎓 <b>EXAM QUIZ BOT</b>\n\n"
+        "नमस्ते! 👋\n"
+        "UPSSSC / SSC परीक्षा की तैयारी के लिए Quiz शुरू करें।\n\n"
+        "📝 Questions: 5\n"
+        "🏆 Score: Automatic\n"
+        "📖 Explanation: हर प्रश्न के बाद\n\n"
+        "👇 नीचे button दबाएँ:",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
 
 
-# =========================================================
-# SEEN DATABASE
-# =========================================================
+async def send_question(query, context):
+    questions = context.user_data["questions"]
+    no = context.user_data["question_no"]
 
-def load_seen():
-    if not os.path.exists(SEEN_FILE):
-        return set()
+    if no >= len(questions):
+        score = context.user_data["score"]
 
-    try:
-        with open(SEEN_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-        return set(data)
-
-    except Exception:
-        return set()
-
-
-def save_seen(seen):
-    with open(SEEN_FILE, "w", encoding="utf-8") as f:
-        json.dump(
-            sorted(seen),
-            f,
-            ensure_ascii=False,
-            indent=2
+        await query.edit_message_text(
+            f"🏆 <b>QUIZ COMPLETE!</b>\n\n"
+            f"📊 Your Score: <b>{score}/{len(questions)}</b>\n\n"
+            f"🎯 Accuracy: <b>{score / len(questions) * 100:.0f}%</b>\n\n"
+            f"🔥 बहुत बढ़िया! फिर से खेलें:",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔄 Play Again", callback_data="restart")]
+            ]),
         )
+        return
+
+    item = questions[no]
+
+    keyboard = []
+
+    for i, option in enumerate(item["options"]):
+        keyboard.append([
+            InlineKeyboardButton(
+                f"{chr(65+i)}) {option}",
+                callback_data=f"answer_{i}",
+            )
+        ])
+
+    await query.edit_message_text(
+        f"🧠 <b>QUESTION {no + 1}/{len(questions)}</b>\n\n"
+        f"📌 {item['q']}\n\n"
+        f"👇 सही उत्तर चुनें:",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
 
 
-# =========================================================
-# URL HANDLING
-# =========================================================
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
 
-def make_absolute_url(base_url, href):
-    if not href:
-        return base_url
+    if query.data == "start_quiz":
+        context.user_data["question_no"] = 0
+        context.user_data["score"] = 0
+        await send_question(query, context)
+        return
 
-    return urljoin(base_url, href)
-
-
-# =========================================================
-# WEBSITE FETCH
-# =========================================================
-
-def fetch_page(url, source_name):
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Linux; Android 10) "
-            "AppleWebKit/537.36 "
-            "(KHTML, like Gecko) "
-            "Chrome/120.0 Mobile Safari/537.36"
-        ),
-        "Accept": (
-            "text/html,application/xhtml+xml,"
-            "application/xml;q=0.9,*/*;q=0.8"
-        ),
-        "Accept-Language": "en-US,en;q=0.9,hi;q=0.8",
-    }
-
-    try:
-        response = requests.get(
-            url,
-            headers=headers,
-            timeout=30
+    if query.data == "restart":
+        context.user_data["score"] = 0
+        context.user_data["question_no"] = 0
+        context.user_data["questions"] = random.sample(
+            QUESTIONS,
+            min(5, len(QUESTIONS))
         )
+        await send_question(query, context)
+        return
 
-        response.raise_for_status()
-        return response
+    if query.data.startswith("answer_"):
+        selected = int(query.data.split("_")[1])
 
-    except requests.exceptions.SSLError:
+        questions = context.user_data["questions"]
+        no = context.user_data["question_no"]
+        item = questions[no]
 
-        # UPSSSC पर कभी-कभी SSL issue आता है।
-        # केवल SSL failure होने पर fallback.
-        if source_name == "UPSSSC":
-            response = requests.get(
-                url,
-                headers=headers,
-                timeout=30,
-                verify=False
+        correct = item["answer"]
+
+        if selected == correct:
+            context.user_data["score"] += 1
+
+            result = "✅ <b>सही उत्तर!</b>"
+        else:
+            result = (
+                "❌ <b>गलत उत्तर!</b>\n"
+                f"सही उत्तर: <b>{chr(65+correct)}) "
+                f"{item['options'][correct]}</b>"
             )
 
-            response.raise_for_status()
-            return response
-
-        raise
-
-
-# =========================================================
-# EXTRACT NOTICES
-# =========================================================
-
-def get_items(source_name, url):
-
-    response = fetch_page(url, source_name)
-
-    soup = BeautifulSoup(
-        response.text,
-        "html.parser"
-    )
-
-    items = []
-
-    for a in soup.find_all("a", href=True):
-
-        text = a.get_text(
-            " ",
-            strip=True
+        await query.edit_message_text(
+            f"{result}\n\n"
+            f"📖 <b>Explanation:</b>\n"
+            f"{item['explanation']}\n\n"
+            f"🏆 Score: "
+            f"<b>{context.user_data['score']}/{no + 1}</b>",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("➡️ अगला प्रश्न", callback_data="next")]
+            ]),
         )
+        return
 
-        href = a.get(
-            "href",
-            ""
-        ).strip()
-
-        if not text:
-            continue
-
-        if len(text) < 5:
-            continue
-
-        text_lower = text.lower()
-
-        # केवल relevant government-job updates
-        if not any(
-            keyword in text_lower
-            for keyword in KEYWORDS
-        ):
-            continue
-
-        link = make_absolute_url(
-            url,
-            href
-        )
-
-        # Hash = duplicate protection
-        key_text = (
-            f"{source_name}|"
-            f"{text}|"
-            f"{link}"
-        )
-
-        key = hashlib.sha256(
-            key_text.encode("utf-8")
-        ).hexdigest()
-
-        items.append(
-            {
-                "key": key,
-                "source": source_name,
-                "text": text,
-                "link": link,
-            }
-        )
-
-    # Same notice page पर duplicate links हटाना
-    unique = {}
-
-    for item in items:
-        unique[item["key"]] = item
-
-    return list(unique.values())
+    if query.data == "next":
+        context.user_data["question_no"] += 1
+        await send_question(query, context)
 
 
-# =========================================================
-# TELEGRAM
-# =========================================================
-
-def send_telegram(message):
-
-    telegram_url = (
-        f"https://api.telegram.org/"
-        f"bot{BOT_TOKEN}/sendMessage"
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "🎓 <b>EXAM QUIZ BOT</b>\n\n"
+        "/start — Quiz शुरू करें\n"
+        "/help — Help\n\n"
+        "📝 अभी Private Testing Mode में है।",
+        parse_mode="HTML",
     )
 
-    response = requests.post(
-        telegram_url,
-        data={
-            "chat_id": ADMIN_ID,
-            "text": message,
-            "parse_mode": "HTML",
-            "disable_web_page_preview": False,
-        },
-        timeout=30,
-    )
-
-    response.raise_for_status()
-
-    return True
-
-
-# =========================================================
-# NOTICE DESIGN
-# =========================================================
-
-def create_notice_message(item):
-
-    source = html.escape(
-        item["source"]
-    )
-
-    title = html.escape(
-        item["text"]
-    )
-
-    link = html.escape(
-        item["link"],
-        quote=True
-    )
-
-    category = html.escape(
-        detect_category(item["text"])
-    )
-
-    # Source branding
-    if item["source"] == "UPSSSC":
-        source_icon = "🟢"
-        source_name = "UPSSSC"
-
-    elif item["source"] == "SSC":
-        source_icon = "🔵"
-        source_name = "SSC"
-
-    else:
-        source_icon = "🟠"
-        source_name = "Sarkari Result"
-
-    message = f"""
-<b>🚨 NEW GOVERNMENT JOB UPDATE</b>
-
-━━━━━━━━━━━━━━━━━━━━
-
-{source_icon} <b>{source_name}</b>
-
-📌 <b>UPDATE</b>
-{title}
-
-📂 <b>CATEGORY</b>
-{category}
-
-━━━━━━━━━━━━━━━━━━━━
-
-🔗 <b><a href="{link}">📄 OFFICIAL NOTICE / DETAILS</a></b>
-
-━━━━━━━━━━━━━━━━━━━━
-
-⚡ <b>UPSSSC NOTICE BOARD</b>
-📡 Automatic Monitoring
-🔔 Fast Government Job Alerts
-
-<i>Source: {source}</i>
-"""
-
-    return message.strip()
-
-
-# =========================================================
-# MAIN MONITOR
-# =========================================================
 
 def main():
-
-    print("=" * 60)
-    print("UPSSSC NOTICE BOARD - PRIVATE TESTING")
-    print("=" * 60)
-
-    # Secrets check
     if not BOT_TOKEN:
-        print("❌ ERROR: BOT_TOKEN is missing")
+        print("ERROR: BOT_TOKEN missing")
         return
 
-    if not ADMIN_ID:
-        print("❌ ERROR: ADMIN_ID is missing")
-        return
+    app = Application.builder().token(BOT_TOKEN).build()
 
-    seen = load_seen()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CallbackQueryHandler(button_handler))
 
-    first_run = not os.path.exists(
-        SEEN_FILE
-    )
+    print("🚀 QUIZ BOT STARTED")
+    print("📡 Waiting for Telegram messages...")
 
-    all_items = []
+    app.run_polling()
 
-    successful_sources = 0
-
-    # -----------------------------------------------------
-    # CHECK ALL SOURCES
-    # -----------------------------------------------------
-
-    for source_name, url in SOURCES.items():
-
-        try:
-
-            items = get_items(
-                source_name,
-                url
-            )
-
-            print(
-                f"✅ {source_name}: "
-                f"{len(items)} relevant items found"
-            )
-
-            all_items.extend(items)
-
-            successful_sources += 1
-
-        except Exception as e:
-
-            print(
-                f"❌ {source_name}: FAILED - "
-                f"{type(e).__name__}: {e}"
-            )
-
-    # -----------------------------------------------------
-    # FIRST RUN
-    # -----------------------------------------------------
-
-    if first_run:
-
-        for item in all_items:
-            seen.add(item["key"])
-
-        save_seen(seen)
-
-        print()
-        print(
-            f"🟢 First run complete."
-        )
-
-        print(
-            f"📦 Existing items saved: "
-            f"{len(all_items)}"
-        )
-
-        print(
-            "🔕 No old notices were sent."
-        )
-
-    # -----------------------------------------------------
-    # NORMAL RUN
-    # -----------------------------------------------------
-
-    else:
-
-        new_items = []
-
-        for item in all_items:
-
-            if item["key"] not in seen:
-                new_items.append(item)
-
-        print()
-        print(
-            f"🆕 New items detected: "
-            f"{len(new_items)}"
-        )
-
-        # Send new notices
-        for item in new_items:
-
-            message = create_notice_message(
-                item
-            )
-
-            try:
-
-                send_telegram(
-                    message
-                )
-
-                # केवल successful send के बाद
-                # database में save करें
-                seen.add(
-                    item["key"]
-                )
-
-                print(
-                    f"📨 Telegram sent: "
-                    f"{item['source']} - "
-                    f"{item['text']}"
-                )
-
-            except Exception as e:
-
-                print(
-                    f"❌ Telegram failed: "
-                    f"{type(e).__name__}: {e}"
-                )
-
-        save_seen(seen)
-
-    # -----------------------------------------------------
-    # FINAL STATUS
-    # -----------------------------------------------------
-
-    print()
-    print("=" * 60)
-
-    print(
-        f"📡 Sources successful: "
-        f"{successful_sources}/3"
-    )
-
-    print(
-        f"💾 Total saved notices: "
-        f"{len(seen)}"
-    )
-
-    print(
-        "✅ Scan complete"
-    )
-
-    print("=" * 60)
-
-
-# =========================================================
-# START
-# =========================================================
 
 if __name__ == "__main__":
     main()

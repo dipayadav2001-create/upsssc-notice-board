@@ -1,23 +1,5 @@
 [
   {
-    "title": "Status of Recruitment Cases (Advertisement-wise)",
-    "url": "https://www.upsc.gov.in/recruitment/status-recruitment-cases-advertisementwise",
-    "source": "UPSC",
-    "category": "UPSC"
-  },
-  {
-    "title": "Recruitment Tests",
-    "url": "https://www.upsc.gov.in/recruitment/recruitment-test",
-    "source": "UPSC",
-    "category": "UPSC"
-  },
-  {
-    "title": "Recruitment Requisition",
-    "url": "https://www.upsc.gov.in/recruitment/recruitment-requisition",
-    "source": "UPSC",
-    "category": "UPSC"
-  },
-  {
     "title": "Recruitment cases kept on hold on account of Pending Litigations",
     "url": "https://www.upsc.gov.in/recruitment/recruitment-cases-kept-hold-account-pending-litigations",
     "source": "UPSC",
@@ -98,6 +80,42 @@
   {
     "title": "Vacancies in UPSC",
     "url": "https://www.upsc.gov.in/vacancy-circulars",
+    "source": "UPSC",
+    "category": "UPSC"
+  },
+  {
+    "title": "Press Note: Combined Defence Services Examination (II), 2026",
+    "url": "https://www.upsc.gov.in/whats-new/Combined%20Defence%20Services%20Examination%20%28II%29%2C%202026/Press%20Note",
+    "source": "UPSC",
+    "category": "UPSC"
+  },
+  {
+    "title": "e - Admit Card: Combined Defence Services Examination (II), 2026",
+    "url": "https://www.upsc.gov.in/whats-new/Combined%20Defence%20Services%20Examination%20%28II%29%2C%202026/e%20-%20Admit%20Card",
+    "source": "UPSC",
+    "category": "UPSC"
+  },
+  {
+    "title": "Press Note: National Defence Academy and Naval Academy Examination (II), 2026",
+    "url": "https://www.upsc.gov.in/whats-new/National%20Defence%20Academy%20and%20Naval%20Academy%20Examination%20%28II%29%2C%202026/Press%20Note",
+    "source": "UPSC",
+    "category": "UPSC"
+  },
+  {
+    "title": "e - Admit Card: National Defence Academy and Naval Academy Examination (II), 2026",
+    "url": "https://www.upsc.gov.in/whats-new/National%20Defence%20Academy%20and%20Naval%20Academy%20Examination%20%28II%29%2C%202026/e%20-%20Admit%20Card",
+    "source": "UPSC",
+    "category": "UPSC"
+  },
+  {
+    "title": "Final Result: CISF AC(EXE) LDCE-2026",
+    "url": "https://www.upsc.gov.in/whats-new/CISF%20AC%28EXE%29%20LDCE-2026/Final%20Result",
+    "source": "UPSC",
+    "category": "UPSC"
+  },
+  {
+    "title": "Engineering Services (Preliminary) Examination, 2027",
+    "url": "https://www.upsc.gov.in/examinations/Engineering%20Services%20%28Preliminary%29%20Examination%2C%202027",
     "source": "UPSC",
     "category": "UPSC"
   }

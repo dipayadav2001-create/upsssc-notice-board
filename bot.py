@@ -518,6 +518,26 @@ def is_relevant(
 
             return False
 
-    generic_titles = [
+    generic_titles = [        "home",
+        "about us",
+        "contact us",
+        "login",
+        "sitemap",
+        "gallery",
+        "archive",
+        "downloads",
+        "links",
+        "feedback",
+        "careers"
+    ]
+
+    if title_clean in generic_titles:
+        return False
+
+    for keyword in IMPORTANT_KEYWORDS:
+        if keyword in title_clean:
+            return True
+
+    return False
 
        

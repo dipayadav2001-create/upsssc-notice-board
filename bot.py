@@ -47,10 +47,6 @@ app = Flask(__name__)
 # OFFICIAL GOVERNMENT SOURCES
 # ------------------------------------------------------------
 SOURCES = {
-    "UPSC": {
-        "name": "UPSC", "url": "https://www.upsc.gov.in/whats-new", "home": "https://www.upsc.gov.in/", "priority": "official",
-        "emoji": "🏛️", "scan_urls": ["https://www.upsc.gov.in/whats-new"],
-    },
     "SSC": {
         "name": "SSC", "url": "https://ssc.gov.in/", "home": "https://ssc.gov.in/", "priority": "official",
         "emoji": "📝", "scan_urls": ["https://ssc.gov.in/"],
@@ -110,16 +106,6 @@ ALL_SOURCES = {**SOURCES, **SECONDARY_SOURCES}
 # EXAMS
 # ------------------------------------------------------------
 EXAMS = {
-    "UPSC": [
-        "Civil Services Examination (CSE)",
-        "NDA",
-        "CDS",
-        "CAPF",
-        "Engineering Services (ESE)",
-        "Combined Medical Services (CMS)",
-        "IES/ISS",
-        "Geo-Scientist",
-    ],
     "SSC": [
         "CGL",
         "CHSL",

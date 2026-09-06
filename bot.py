@@ -1,26 +1,24 @@
 import os
 import json
 import html
-import time
+import hashlib
+import re
 import requests
-
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
-
-# ============================================================
-# CONFIG
-# ============================================================
-
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = os.getenv("ADMIN_ID")
+TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}" if BOT_TOKEN else None
 
+MAX_LATEST = 50
 MAX_ALERTS_PER_RUN = 10
-MAX_LATEST = 20
 
 SEEN_FILE = "seen.json"
 LATEST_FILE = "latest.json"
-
+USERS_FILE = "users.json"
+FOLLOWS_FILE = "follows.json"
+CONTACT_FILE = "contact_waiting.json"
 
 # ============================================================
 # OFFICIAL GOVERNMENT SOURCES
@@ -29,185 +27,212 @@ LATEST_FILE = "latest.json"
 SOURCES = {
     "UPSC": {
         "name": "UPSC",
-        "url": "https://www.upsc.gov.in/"
+        "url": "https://www.upsc.gov.in/whats-new",
+        "home": "https://www.upsc.gov.in/"
     },
-
     "SSC": {
         "name": "SSC",
-        "url": "https://ssc.gov.in/"
+        "url": "https://ssc.gov.in/",
+        "home": "https://ssc.gov.in/"
     },
-
     "RAILWAY": {
         "name": "Railway / RRB",
-        "url": "https://indianrailways.gov.in/"
+        "url": "https://rrb.indianrailways.gov.in/",
+        "home": "https://www.rrcb.gov.in/rrbs.html"
     },
-
     "UPSSSC": {
         "name": "UPSSSC",
-        "url": "https://upsssc.gov.in/"
+        "url": "https://upsssc.gov.in/",
+        "home": "https://upsssc.gov.in/"
     },
-
     "BPSC": {
         "name": "BPSC",
-        "url": "https://www.bpsc.bih.nic.in/"
+        "url": "https://bpsc.bihar.gov.in/",
+        "home": "https://bpsc.bihar.gov.in/"
     }
 }
 
-
 # ============================================================
-# IMPORTANT NOTICE KEYWORDS
+# SPECIFIC EXAMS
 # ============================================================
 
-IMPORTANT_KEYWORDS = [
-    "notification",
-    "recruitment",
-    "vacancy",
-    "vacancies",
-    "application",
-    "apply online",
-    "online application",
-    "advertisement",
+EXAMS = {
+    "UPSC": [
+        "Civil Services Examination (CSE)",
+        "NDA",
+        "CDS",
+        "CAPF",
+        "IES/ISS",
+        "Engineering Services (ESE)",
+        "CMS"
+    ],
+    "SSC": [
+        "CGL",
+        "CHSL",
+        "MTS",
+        "GD Constable",
+        "CPO",
+        "JE",
+        "Stenographer",
+        "Selection Post",
+        "JHT"
+    ],
+    "RAILWAY": [
+        "NTPC",
+        "Group D",
+        "ALP",
+        "Technician",
+        "JE",
+        "RPF Constable",
+        "RPF SI",
+        "Paramedical"
+    ],
+    "UPSSSC": [
+        "PET",
+        "Junior Assistant",
+        "VDO",
+        "Stenographer",
+        "Lekhpal",
+        "Assistant Store Keeper",
+        "Enforcement Constable"
+    ],
+    "BPSC": [
+        "70th CCE",
+        "71st CCE",
+        "72nd CCE",
+        "Teacher Recruitment",
+        "TRE",
+        "Head Teacher",
+        "Assistant Engineer",
+        "AEDO"
+    ]
+}
 
-    "exam",
-    "examination",
-    "exam date",
-    "exam schedule",
-    "examination schedule",
-    "timetable",
-    "time table",
-
-    "admit card",
-    "admitcard",
-    "hall ticket",
-
-    "result",
-    "final result",
-    "written result",
-    "merit list",
-    "selection list",
-
-    "cut off",
-    "cutoff",
-
-    "answer key",
-    "answerkey",
-    "response sheet",
-    "provisional answer key",
-    "final answer key",
-
-    "correction",
-    "correction window",
-    "application status",
-
-    "important notice",
-    "public notice",
-    "revised notice",
-    "revised schedule",
-
-    "document verification",
-    "skill test",
-    "typing test",
-    "interview",
-
-    "eligibility",
-    "syllabus",
-    "fee",
-    "registration",
-    "registration date",
-    "appointment"
+INFO_TYPES = [
+    ("Notification", "NOTIFICATION"),
+    ("Application / Apply", "APPLICATION"),
+    ("Admit Card", "ADMIT"),
+    ("Exam Date", "EXAMDATE"),
+    ("Answer Key", "ANSWERKEY"),
+    ("Result", "RESULT"),
+    ("Cut Off", "CUTOFF"),
+    ("Vacancy", "VACANCY"),
+    ("All Updates", "ALL")
 ]
 
+# ============================================================
+# SESSION
+# ============================================================
+
+SESSION = requests.Session()
+SESSION.headers.update({
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 Chrome/120.0 Safari/537.36"
+    )
+})
 
 # ============================================================
-# BLOCKED TITLES
+# STORAGE
 # ============================================================
 
-BLOCKED_EXACT_TITLES = [
-    "advertisements",
-    "recruitment",
-    "recruitment tests",
-    "recruitment requisition",
-    "status of recruitment cases",
-    "status of recruitment cases (advertisement-wise)",
-    "representation on question papers",
-    "recruitment cases kept on hold on account of pending litigations",
-    "lateral recruitment cases",
-    "status of lateral recruitment cases",
-    "news",
-    "events",
-    "tenders",
-    "press releases",
-    "what's new",
-    "whats new"
-]
+def load_json(path, default):
+    try:
+        if not os.path.exists(path):
+            return default
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print("load error", path, e)
+        return default
 
 
-BLOCKED_KEYWORDS = [
-    "representation on question papers",
-    "recruitment requisition",
-    "pending litigation",
-    "litigation cases",
-    "court case",
-    "court cases",
-    "recruitment cases kept on hold",
-    "status of recruitment cases",
-    "advertisement-wise status",
-    "lateral recruitment cases",
-    "departmental",
-    "internal"
-]
+def save_json(path, data):
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print("save error", path, e)
 
+
+def load_seen():
+    return set(load_json(SEEN_FILE, []))
+
+
+def save_seen(value):
+    save_json(SEEN_FILE, sorted(value))
+
+
+def load_latest():
+    return load_json(LATEST_FILE, [])
+
+
+def save_latest(items):
+    save_json(LATEST_FILE, items[-MAX_LATEST:])
+
+
+def load_users():
+    return load_json(USERS_FILE, {})
+
+
+def save_user(chat_id, user):
+    users = load_users()
+    users[str(chat_id)] = {
+        "chat_id": chat_id,
+        "name": user.get("first_name", ""),
+        "username": user.get("username", "")
+    }
+    save_json(USERS_FILE, users)
+
+
+def load_follows():
+    return load_json(FOLLOWS_FILE, {})
+
+
+def save_follows(data):
+    save_json(FOLLOWS_FILE, data)
+
+
+def load_contact_waiting():
+    return set(load_json(CONTACT_FILE, []))
+
+
+def save_contact_waiting(data):
+    save_json(CONTACT_FILE, sorted(data))
 
 # ============================================================
 # TELEGRAM API
 # ============================================================
 
-TELEGRAM_API = (
-    f"https://api.telegram.org/bot{BOT_TOKEN}"
-    if BOT_TOKEN
-    else None
-)
-
-
-def telegram_request(method, data=None, timeout=30):
-
+def telegram_request(method, data=None):
     if not TELEGRAM_API:
         print("BOT_TOKEN missing")
         return None
 
     try:
-
         response = requests.post(
             f"{TELEGRAM_API}/{method}",
             data=data or {},
-            timeout=timeout
+            timeout=30
         )
 
         if response.status_code != 200:
-
             print(
                 "Telegram error:",
+                method,
                 response.status_code,
                 response.text[:500]
             )
-
             return None
 
         return response.json()
 
     except Exception as e:
-
-        print("Telegram request error:", e)
-
+        print("Telegram request error:", method, e)
         return None
 
 
-# ============================================================
-# SEND TELEGRAM MESSAGE
-# ============================================================
-
 def send_message(chat_id, text, reply_markup=None):
-
     data = {
         "chat_id": chat_id,
         "text": text,
@@ -216,362 +241,311 @@ def send_message(chat_id, text, reply_markup=None):
     }
 
     if reply_markup:
-
         data["reply_markup"] = json.dumps(
             reply_markup,
             ensure_ascii=False
         )
 
-    return telegram_request(
-        "sendMessage",
-        data
-    )
+    return telegram_request("sendMessage", data)
 
+
+def answer_callback(callback_id):
+    if callback_id:
+        telegram_request(
+            "answerCallbackQuery",
+            {"callback_query_id": callback_id}
+        )
 
 # ============================================================
-# MAIN MENU
+# KEYBOARDS
 # ============================================================
 
 def main_keyboard():
-
     return {
         "keyboard": [
-
             [
-                {"text": "🆕 New Notices"},
-                {"text": "📚 Exams"}
+                {"text": "📚 Exams"},
+                {"text": "🆕 New Notices"}
             ],
-
+            [
+                {"text": "🔎 Search Exam"},
+                {"text": "🔔 My Follows"}
+            ],
             [
                 {"text": "📊 Status"},
                 {"text": "❓ Help"}
             ],
-
             [
-                {"text": "🔔 All Updates"}
+                {"text": "💬 Contact Admin"}
             ]
-
         ],
-
         "resize_keyboard": True
     }
 
 
-# ============================================================
-# EXAM MENU
-# ============================================================
-
 def exam_keyboard():
-
     return {
         "inline_keyboard": [
-
             [
-                {
-                    "text": "🇮🇳 UPSC",
-                    "callback_data": "EXAM_UPSC"
-                },
-
-                {
-                    "text": "📝 SSC",
-                    "callback_data": "EXAM_SSC"
-                }
+                {"text": "🇮🇳 UPSC", "callback_data": "BOARD:UPSC"},
+                {"text": "📝 SSC", "callback_data": "BOARD:SSC"}
             ],
-
             [
-                {
-                    "text": "🚆 Railway",
-                    "callback_data": "EXAM_RAILWAY"
-                },
-
-                {
-                    "text": "🟢 UPSSSC",
-                    "callback_data": "EXAM_UPSSSC"
-                }
+                {"text": "🚆 Railway / RRB", "callback_data": "BOARD:RAILWAY"},
+                {"text": "🟢 UPSSSC", "callback_data": "BOARD:UPSSSC"}
             ],
-
             [
-                {
-                    "text": "🔵 BPSC",
-                    "callback_data": "EXAM_BPSC"
-                }
+                {"text": "🔵 BPSC", "callback_data": "BOARD:BPSC"}
             ],
-
             [
-                {
-                    "text": "📢 All Exams",
-                    "callback_data": "EXAM_ALL"
-                }
+                {"text": "📢 All Exams", "callback_data": "BOARD:ALL"}
             ]
-
         ]
     }
 
 
+def make_exam_id(board, exam):
+    # Short stable ID so callback_data stays well below Telegram's 64-byte limit.
+    return hashlib.md5(
+        f"{board}|{exam}".encode("utf-8")
+    ).hexdigest()[:10]
+
+
+def exam_from_id(board, exam_id):
+    for exam in EXAMS.get(board, []):
+        if make_exam_id(board, exam) == exam_id:
+            return exam
+    return None
+
+
+def exam_list_keyboard(board):
+    rows = []
+
+    exams = EXAMS.get(board, [])
+
+    for i in range(0, len(exams), 2):
+        row = []
+
+        for exam in exams[i:i + 2]:
+            row.append({
+                "text": exam,
+                "callback_data": (
+                    f"EXAM:{board}:{make_exam_id(board, exam)}"
+                )
+            })
+
+        rows.append(row)
+
+    rows.append([
+        {
+            "text": "🔙 Exams",
+            "callback_data": "BACK:EXAMS"
+        }
+    ])
+
+    return {"inline_keyboard": rows}
+
+
+def info_keyboard(board, exam):
+    exam_id = make_exam_id(board, exam)
+    rows = []
+
+    for i in range(0, len(INFO_TYPES), 2):
+        row = []
+
+        for label, code in INFO_TYPES[i:i + 2]:
+            row.append({
+                "text": label,
+                "callback_data": (
+                    f"INFO:{board}:{code}:{exam_id}"
+                )
+            })
+
+        rows.append(row)
+
+    rows.append([
+        {
+            "text": "🔔 Follow this Exam",
+            "callback_data": f"FOLLOW:{board}:{exam_id}"
+        }
+    ])
+
+    rows.append([
+        {
+            "text": "🔙 Back",
+            "callback_data": f"BOARD:{board}"
+        }
+    ])
+
+    return {"inline_keyboard": rows}
+
 # ============================================================
-# JSON STORAGE
+# SCRAPING
 # ============================================================
 
-def load_json(filename, default):
+IMPORTANT = [
+    "notification",
+    "recruitment",
+    "vacancy",
+    "vacancies",
+    "application",
+    "apply online",
+    "online application",
+    "advertisement",
+    "admit card",
+    "admitcard",
+    "hall ticket",
+    "result",
+    "final result",
+    "written result",
+    "merit list",
+    "selection list",
+    "cut off",
+    "cutoff",
+    "answer key",
+    "answerkey",
+    "response sheet",
+    "exam date",
+    "exam schedule",
+    "examination schedule",
+    "timetable",
+    "important notice",
+    "public notice",
+    "revised notice",
+    "document verification",
+    "skill test",
+    "typing test",
+    "interview",
+    "registration",
+    "appointment"
+]
 
+BLOCKED = [
+    "tender",
+    "procurement",
+    "litigation",
+    "court case",
+    "representation on question papers",
+    "lateral recruitment",
+    "departmental exam",
+    "internal recruitment"
+]
+
+
+def clean(text):
+    return " ".join((text or "").split())
+
+
+def fetch(url):
     try:
-
-        if not os.path.exists(filename):
-            return default
-
-        with open(
-            filename,
-            "r",
-            encoding="utf-8"
-        ) as f:
-
-            return json.load(f)
-
-    except Exception as e:
-
-        print(
-            f"Error loading {filename}:",
-            e
-        )
-
-        return default
-
-
-def save_json(filename, data):
-
-    try:
-
-        with open(
-            filename,
-            "w",
-            encoding="utf-8"
-        ) as f:
-
-            json.dump(
-                data,
-                f,
-                ensure_ascii=False,
-                indent=2
-            )
-
-    except Exception as e:
-
-        print(
-            f"Error saving {filename}:",
-            e
-        )
-
-
-# ============================================================
-# SEEN NOTICES
-# ============================================================
-
-def load_seen():
-
-    return set(
-        load_json(
-            SEEN_FILE,
-            []
-        )
-    )
-
-
-def save_seen(seen):
-
-    save_json(
-        SEEN_FILE,
-        sorted(list(seen))
-    )
-
-
-# ============================================================
-# LATEST NOTICES
-# ============================================================
-
-def load_latest():
-
-    return load_json(
-        LATEST_FILE,
-        []
-    )
-
-
-def save_latest(latest):
-
-    save_json(
-        LATEST_FILE,
-        latest[-MAX_LATEST:]
-    )
-
-
-# ============================================================
-# HTTP SESSION
-# ============================================================
-
-SESSION = requests.Session()
-
-SESSION.headers.update({
-
-    "User-Agent":
-        "Mozilla/5.0 "
-        "(Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 "
-        "(KHTML, like Gecko) "
-        "Chrome/120.0 Safari/537.36"
-
-})
-
-
-# ============================================================
-# FETCH WEBSITE
-# ============================================================
-
-def fetch(url, timeout=30):
-
-    try:
-
         response = SESSION.get(
             url,
-            timeout=timeout,
+            timeout=25,
             allow_redirects=True
         )
-
         response.raise_for_status()
-
         return response.text
-
     except Exception as e:
-
-        print(
-            f"Fetch failed: {url}"
-        )
-
-        print(e)
-
+        print("Fetch failed:", url, e)
         return None
 
 
-# ============================================================
-# NOTICE FILTER
-# ============================================================
+def relevant(title):
+    text = clean(title).lower()
 
-def is_relevant(title, source):
-
-    title_clean = " ".join(
-        title.lower().split()
-    )
-
-    # Block exact unwanted pages
-    if title_clean in BLOCKED_EXACT_TITLES:
+    if len(text) < 8:
         return False
 
-    # Block unwanted categories
-    for keyword in BLOCKED_KEYWORDS:
-
-        if keyword in title_clean:
-            return False
-
-    # Generic website links
-    generic_titles = [
-
-        "home",
-        "about us",
-        "contact us",
-        "login",
-        "sitemap",
-        "gallery",
-        "archive",
-        "downloads",
-        "links",
-        "feedback",
-        "careers"
-
-    ]
-
-    if title_clean in generic_titles:
+    if any(word in text for word in BLOCKED):
         return False
 
-    # Important notice keywords
-    for keyword in IMPORTANT_KEYWORDS:
-
-        if keyword in title_clean:
-            return True
-
-    return False
+    return any(word in text for word in IMPORTANT)
 
 
-# ============================================================
-# DETECT EXAM CATEGORY
-# ============================================================
-
-def detect_category(title, source):
-
-    text = f"{title} {source}".lower()
-
-    if "upsssc" in text:
-        return "UPSSSC"
-
-    if "bpsc" in text:
-        return "BPSC"
-
-    if "upsc" in text:
-        return "UPSC"
-
-    if "ssc" in text:
-        return "SSC"
-
-    if "railway" in text or "rrb" in text:
-        return "RAILWAY"
-
-    return source
+def make_id(source, title, url):
+    raw = f"{source}|{title}|{url}"
+    return hashlib.sha256(
+        raw.encode("utf-8")
+    ).hexdigest()
 
 
-# ============================================================
-# EXTRACT NOTICE LINKS
-# ============================================================
+def detect_exam(board, title):
+    text = title.lower()
 
-def extract_generic_items(
-    html_text,
-    base_url,
-    source_name
-):
+    aliases = {
+        "CGL": ["cgl", "combined graduate level"],
+        "CHSL": ["chsl", "combined higher secondary"],
+        "MTS": ["mts", "multi tasking"],
+        "GD Constable": [
+            "gd constable",
+            "constable (gd)",
+            "ssc gd"
+        ],
+        "CPO": ["cpo"],
+        "JE": ["junior engineer", "ssc je", "rrb je"],
+        "NTPC": ["ntpc"],
+        "Group D": ["group d", "level 1"],
+        "ALP": ["alp", "assistant loco"],
+        "Technician": ["technician"],
+        "PET": ["pet", "preliminary eligibility test"],
+        "VDO": ["vdo", "village development officer"],
+        "Junior Assistant": ["junior assistant"],
+        "Lekhpal": ["lekhpal"],
+        "70th CCE": ["70th cce", "70th combined"],
+        "71st CCE": ["71st cce", "71st combined"],
+        "72nd CCE": ["72nd cce", "72nd combined"],
+        "Civil Services Examination (CSE)": [
+            "civil services",
+            "cse",
+            "ias"
+        ],
+        "NDA": ["nda"],
+        "CDS": ["cds"],
+        "CAPF": ["capf"]
+    }
 
+    for exam, words in aliases.items():
+        for word in words:
+            if word in text:
+                return exam
+
+    return board
+
+
+def extract_items(html_text, page_url, board):
     soup = BeautifulSoup(
         html_text,
         "html.parser"
     )
 
+    source = SOURCES[board]
     items = []
-
     seen_urls = set()
 
-    for a in soup.find_all(
+    for anchor in soup.find_all(
         "a",
         href=True
     ):
-
-        title = a.get_text(
-            " ",
-            strip=True
+        title = clean(
+            anchor.get_text(
+                " ",
+                strip=True
+            )
         )
 
-        if not title:
+        href = anchor.get(
+            "href",
+            ""
+        ).strip()
+
+        if not title or not href:
             continue
 
-        title = " ".join(
-            title.split()
-        )
-
-        if len(title) < 8:
-            continue
-
-        href = a.get("href")
-
-        if not href:
+        if not relevant(title):
             continue
 
         url = urljoin(
-            base_url,
+            page_url,
             href
         )
 
@@ -581,309 +555,376 @@ def extract_generic_items(
         if url in seen_urls:
             continue
 
-        if not is_relevant(
-            title,
-            source_name
-        ):
-            continue
-
         seen_urls.add(url)
 
         items.append({
-
-            "title": title[:300],
-
+            "id": make_id(
+                board,
+                title,
+                url
+            ),
+            "source_key": board,
+            "source": source["name"],
+            "title": title[:350],
             "url": url,
-
-            "source": source_name,
-
-            "category":
-                detect_category(
-                    title,
-                    source_name
-                )
-
+            "exam": detect_exam(
+                board,
+                title
+            )
         })
 
     return items
 
 
-# ============================================================
-# SCAN ONE SOURCE
-# ============================================================
+def scan_source(board):
+    source = SOURCES[board]
 
-def scan_source(source_key):
-
-    source = SOURCES[source_key]
-
-    html_text = fetch(
+    pages = [
         source["url"]
+    ]
+
+    if source["home"] not in pages:
+        pages.append(source["home"])
+
+    all_items = []
+
+    for page in pages:
+        text = fetch(page)
+
+        if not text:
+            continue
+
+        try:
+            all_items.extend(
+                extract_items(
+                    text,
+                    page,
+                    board
+                )
+            )
+        except Exception as e:
+            print(
+                "Parse error:",
+                board,
+                e
+            )
+
+    unique = {}
+
+    for item in all_items:
+        unique[item["id"]] = item
+
+    return list(unique.values())
+
+
+def scan_all():
+    all_items = []
+
+    for board in SOURCES:
+        try:
+            all_items.extend(
+                scan_source(board)
+            )
+        except Exception as e:
+            print(
+                "Scan error:",
+                board,
+                e
+            )
+
+    unique = {}
+
+    for item in all_items:
+        unique[item["id"]] = item
+
+    items = list(unique.values())
+
+    save_latest(
+        items[-MAX_LATEST:]
     )
 
-    if not html_text:
-        return []
+    return items
 
-    return extract_generic_items(
-        html_text,
-        source["url"],
-        source["name"]
+# ============================================================
+# SEARCH / FILTER
+# ============================================================
+
+def info_words(code):
+    return {
+        "NOTIFICATION": [
+            "notification",
+            "advertisement"
+        ],
+        "APPLICATION": [
+            "application",
+            "apply",
+            "registration"
+        ],
+        "ADMIT": [
+            "admit",
+            "hall ticket"
+        ],
+        "EXAMDATE": [
+            "exam date",
+            "schedule",
+            "timetable"
+        ],
+        "ANSWERKEY": [
+            "answer key",
+            "answerkey",
+            "response"
+        ],
+        "RESULT": [
+            "result",
+            "merit",
+            "selection"
+        ],
+        "CUTOFF": [
+            "cut off",
+            "cutoff"
+        ],
+        "VACANCY": [
+            "vacancy",
+            "vacancies",
+            "recruitment",
+            "posts"
+        ]
+    }.get(code, [])
+
+
+def matches_item(item, board, exam, code):
+    if board != "ALL":
+        if item.get("source_key") != board:
+            return False
+
+    if exam and exam != "ALL":
+        wanted = exam.lower()
+        title = item.get(
+            "title",
+            ""
+        ).lower()
+
+        detected = item.get(
+            "exam",
+            ""
+        ).lower()
+
+        if (
+            wanted not in title
+            and wanted not in detected
+        ):
+            return False
+
+    if code != "ALL":
+        title = item.get(
+            "title",
+            ""
+        ).lower()
+
+        if not any(
+            word in title
+            for word in info_words(code)
+        ):
+            return False
+
+    return True
+
+
+def search_updates(board, exam, code="ALL"):
+    latest = load_latest()
+
+    matches = [
+        item
+        for item in latest
+        if matches_item(
+            item,
+            board,
+            exam,
+            code
+        )
+    ]
+
+    if matches:
+        return matches[-10:][::-1]
+
+    # On-demand fresh scan if stored data has no match.
+    boards = (
+        list(SOURCES)
+        if board == "ALL"
+        else [board]
     )
 
+    fresh = []
+
+    for b in boards:
+        fresh.extend(
+            scan_source(b)
+        )
+
+    if fresh:
+        merged = (
+            latest + fresh
+        )
+
+        unique = {}
+
+        for item in merged:
+            unique[item["id"]] = item
+
+        save_latest(
+            list(unique.values())[-MAX_LATEST:]
+        )
+
+    matches = [
+        item
+        for item in fresh
+        if matches_item(
+            item,
+            board,
+            exam,
+            code
+        )
+    ]
+
+    return matches[-10:][::-1]
 
 # ============================================================
-# FORMAT NOTICE
+# DISPLAY
 # ============================================================
 
-def format_notice(item):
+def format_item(item, index=None):
+    prefix = (
+        f"{index}. "
+        if index
+        else ""
+    )
 
     title = html.escape(
         item.get(
             "title",
-            "New Notice"
+            "Notice"
         )
     )
 
     source = html.escape(
         item.get(
             "source",
-            "Unknown"
+            ""
         )
     )
 
-    category = html.escape(
+    url = html.escape(
         item.get(
-            "category",
-            source
-        )
-    )
-
-    url = item.get(
-        "url",
-        ""
-    )
-
-    safe_url = html.escape(
-        url,
+            "url",
+            ""
+        ),
         quote=True
     )
 
     return (
-
-        "🔔 <b>NEW GOVERNMENT EXAM NOTICE</b>\n\n"
-
-        f"📚 <b>Exam:</b> {category}\n"
-
-        f"🏢 <b>Source:</b> {source}\n\n"
-
-        f"📌 <b>{title}</b>\n\n"
-
-        f"🔗 <a href=\"{safe_url}\">"
-        "Open Official Notice"
-        "</a>"
-
+        f"{prefix}<b>{title}</b>\n"
+        f"🏢 {source}\n"
+        f"🔗 <a href=\"{url}\">Official Link</a>"
     )
 
 
-# ============================================================
-# SEND NEW NOTICE
-# ============================================================
-
-def send_new_notice(item):
-
-    if not ADMIN_ID:
-
-        print(
-            "ADMIN_ID missing"
-        )
-
-        return False
-
-    result = send_message(
-        ADMIN_ID,
-        format_notice(item)
-    )
-
-    return bool(
-        result
-        and result.get("ok")
-    )
-
-
-# ============================================================
-# HELP
-# ============================================================
-
-def send_help(chat_id):
-
-    text = """
-
-🤖 <b>Government Exam Notice Board</b>
-
-यह bot official government exam websites से important notices track करता है।
-
-<b>📚 Available Exams</b>
-
-🇮🇳 UPSC
-📝 SSC
-🚆 Railway / RRB
-🟢 UPSSSC
-🔵 BPSC
-
-<b>👇 Options</b>
-
-🆕 <b>New Notices</b>
-Latest available notices देखें।
-
-📚 <b>Exams</b>
-अपना exam select करें।
-
-📊 <b>Status</b>
-Bot की monitoring स्थिति देखें।
-
-🔔 <b>All Updates</b>
-सभी available latest updates देखें।
-
-❓ <b>Help</b>
-Bot का उपयोग समझें।
-
-<b>⏱ Monitoring</b>
-
-Government exam websites automatically scan की जाती हैं।
-
-"""
-
-    send_message(
-        chat_id,
-        text,
-        main_keyboard()
-    )
-
-
-# ============================================================
-# STATUS
-# ============================================================
-
-def send_status(chat_id):
-
-    latest = load_latest()
-
-    seen = load_seen()
-
-    text = (
-
-        "📊 <b>BOT STATUS</b>\n\n"
-
-        "🟢 <b>Bot:</b> Online\n"
-
-        "⚡ <b>Telegram:</b> Webhook Mode\n\n"
-
-        f"📚 <b>Sources:</b> "
-        f"{len(SOURCES)}\n"
-
-        f"🔎 <b>Tracked Notices:</b> "
-        f"{len(seen)}\n"
-
-        f"🆕 <b>Latest Saved:</b> "
-        f"{len(latest)}\n\n"
-
-        "🌐 <b>Official Sources</b>\n\n"
-
-        "• UPSC\n"
-        "• SSC\n"
-        "• Railway / RRB\n"
-        "• UPSSSC\n"
-        "• BPSC"
-
-    )
-
-    send_message(
-        chat_id,
-        text,
-        main_keyboard()
-    )
-
-
-# ============================================================
-# LATEST NOTICES
-# ============================================================
-
-def send_latest(
-    chat_id,
-    category=None
-):
-
-    latest = load_latest()
-
-    if category and category != "ALL":
-
-        latest = [
-
-            item
-            for item in latest
-
-            if item.get(
-                "category"
-            ) == category
-
-        ]
-
-    if not latest:
-
+def send_items(chat_id, items, heading):
+    if not items:
         send_message(
-
             chat_id,
-
-            "📭 <b>No notices found.</b>\n\n"
-            "नई notices आने पर यहाँ दिखाई देंगी।",
-
+            (
+                f"ℹ️ <b>{html.escape(heading)}</b>\n\n"
+                "इस category में अभी matching notice नहीं मिला।\n\n"
+                "Official website पर भी verify करें।"
+            ),
             main_keyboard()
-
         )
-
         return
 
-    latest = latest[-10:]
+    text = (
+        f"📢 <b>{html.escape(heading)}</b>\n\n"
+        + "\n\n".join(
+            format_item(
+                item,
+                i + 1
+            )
+            for i, item in enumerate(
+                items[:10]
+            )
+        )
+    )
+
+    send_message(
+        chat_id,
+        text,
+        main_keyboard()
+    )
+
+# ============================================================
+# FOLLOWS
+# ============================================================
+
+def follow(chat_id, board, exam):
+    data = load_follows()
+    key = str(chat_id)
+
+    data.setdefault(
+        key,
+        []
+    )
+
+    tag = f"{board}|{exam}"
+
+    if tag not in data[key]:
+        data[key].append(tag)
+        save_follows(data)
+        return True
+
+    return False
+
+
+def send_follows(chat_id):
+    data = load_follows().get(
+        str(chat_id),
+        []
+    )
+
+    if not data:
+        send_message(
+            chat_id,
+            (
+                "🔔 <b>My Follows</b>\n\n"
+                "अभी कोई exam follow नहीं किया है।\n\n"
+                "📚 Exams → Board → Exam → "
+                "🔔 Follow this Exam"
+            ),
+            main_keyboard()
+        )
+        return
 
     lines = [
-        "🆕 <b>LATEST NOTICES</b>\n"
+        "🔔 <b>My Followed Exams</b>",
+        ""
     ]
 
-    for index, item in enumerate(
-        reversed(latest),
-        start=1
-    ):
-
-        title = html.escape(
-            item.get(
-                "title",
-                "Notice"
+    for tag in data:
+        try:
+            board, exam = tag.split(
+                "|",
+                1
             )
-        )
-
-        source = html.escape(
-            item.get(
-                "source",
-                ""
-            )
-        )
-
-        url = html.escape(
-            item.get(
-                "url",
-                ""
-            ),
-            quote=True
-        )
+        except ValueError:
+            continue
 
         lines.append(
-
-            f"{index}. <b>{source}</b>\n"
-            f"{title}\n"
-            f"🔗 <a href=\"{url}\">"
-            "Open Notice"
-            "</a>\n"
-
+            f"• {html.escape(exam)} — "
+            f"{html.escape(board)}"
         )
+
+    lines.append(
+        "\nNew matching updates मिलने पर "
+        "bot alert भेजेगा।"
+    )
 
     send_message(
         chat_id,
@@ -892,460 +933,905 @@ def send_latest(
     )
 
 
-# ============================================================
-# TEXT COMMAND HANDLER
-# ============================================================
+def notify_followers(items):
+    follows = load_follows()
+    sent = 0
 
-def handle_text(
-    chat_id,
-    text
-):
-
-    text = text.strip()
-
-    # /start
-    if text.startswith("/start"):
-
-        send_message(
-
-            chat_id,
-
-            "👋 <b>नमस्ते!</b>\n\n"
-
-            "🎯 <b>Government Exam Notice Board</b> "
-            "में आपका स्वागत है।\n\n"
-
-            "मैं इन official exam websites को monitor करता हूँ:\n\n"
-
-            "🇮🇳 UPSC\n"
-            "📝 SSC\n"
-            "🚆 Railway / RRB\n"
-            "🟢 UPSSSC\n"
-            "🔵 BPSC\n\n"
-
-            "नीचे menu से option चुनें 👇",
-
-            main_keyboard()
-
+    for item in items:
+        board = item.get(
+            "source_key"
         )
 
-        return
+        title = item.get(
+            "title",
+            ""
+        ).lower()
 
-    # /help
-    if (
-        text.startswith("/help")
-        or text == "❓ Help"
-    ):
+        detected = item.get(
+            "exam",
+            ""
+        ).lower()
 
-        send_help(chat_id)
+        for uid, tags in follows.items():
+            for tag in tags:
+                try:
+                    follow_board, exam = tag.split(
+                        "|",
+                        1
+                    )
+                except ValueError:
+                    continue
 
-        return
+                if follow_board != board:
+                    continue
 
-    # Exams
-    if (
-        text == "📚 Exams"
-        or text.startswith("/exams")
-    ):
+                wanted = exam.lower()
 
-        send_message(
+                # For known exams, title or detected exam must match.
+                if (
+                    wanted not in title
+                    and wanted not in detected
+                ):
+                    continue
 
-            chat_id,
+                result = send_message(
+                    uid,
+                    (
+                        "🔔 <b>NEW MATCHING EXAM UPDATE</b>\n\n"
+                        + format_item(item)
+                    )
+                )
 
-            "📚 <b>Exam Select करें</b>\n\n"
-            "जिस exam के notices देखना चाहते हैं "
-            "उसे चुनें 👇",
+                if result and result.get("ok"):
+                    sent += 1
 
-            exam_keyboard()
+                break
 
-        )
+    return sent
 
-        return
+# ============================================================
+# HELP / STATUS
+# ============================================================
 
-    # Status
-    if (
-        text == "📊 Status"
-        or text.startswith("/status")
-    ):
+def send_help(chat_id):
+    text = """🤖 <b>Government Exam Information Assistant</b>
 
-        send_status(chat_id)
+यह bot UPSC, SSC, Railway/RRB, UPSSSC और BPSC के official sources से exam updates खोजने में मदद करता है।
 
-        return
+<b>आप देख सकते हैं:</b>
+• Notification
+• Application / Apply
+• Admit Card
+• Exam Date
+• Answer Key
+• Result
+• Cut Off
+• Vacancy
+• All Updates
 
-    # Latest
-    if (
-        text.startswith("/latest")
-        or text == "🆕 New Notices"
-        or text == "🔔 All Updates"
-    ):
+<b>📚 Exams</b>
+Board → Specific Exam → Information Type चुनें।
 
-        send_latest(chat_id)
+<b>🔎 Search Exam</b>
+CGL, CHSL, MTS, PET, NTPC जैसे exam नाम search करें।
 
-        return
+<b>🔔 Follow</b>
+अपने exam को follow करके matching updates के alerts पाएँ।
 
-    # Unknown command
+<b>💬 Contact Admin</b>
+Admin को message भेजने के लिए इसका उपयोग करें।
+
+⚠️ आवेदन, फीस और तारीख से पहले official notice जरूर verify करें।"""
+
     send_message(
-
         chat_id,
-
-        "🤖 <b>Option select करें</b>\n\n"
-        "मुझे यह command समझ नहीं आया।",
-
+        text,
         main_keyboard()
-
     )
 
 
-# ============================================================
-# CALLBACK BUTTON HANDLER
-# ============================================================
+def send_status(chat_id):
+    seen = load_seen()
+    latest = load_latest()
+    users = load_users()
+    follows = load_follows()
 
-def handle_callback(callback):
-
-    callback_id = callback.get(
-        "id"
+    followed_count = sum(
+        len(value)
+        for value in follows.values()
     )
 
-    if callback_id:
+    text = (
+        "📊 <b>BOT STATUS</b>\n\n"
+        "🟢 Bot: Online\n"
+        "⚡ Telegram: Webhook Mode\n"
+        f"📚 Official Boards: {len(SOURCES)}\n"
+        f"🔎 Tracked Notices: {len(seen)}\n"
+        f"🆕 Latest Saved: {len(latest)}\n"
+        f"👥 Users: {len(users)}\n"
+        f"🔔 Follows: {followed_count}"
+    )
 
-        telegram_request(
+    send_message(
+        chat_id,
+        text,
+        main_keyboard()
+    )
 
-            "answerCallbackQuery",
+# ============================================================
+# ADMIN CONTACT / BROADCAST / POLL
+# ============================================================
 
-            {
-                "callback_query_id":
-                    callback_id
-            }
+def contact_admin(chat_id):
+    waiting = load_contact_waiting()
 
+    waiting.add(
+        str(chat_id)
+    )
+
+    save_contact_waiting(
+        waiting
+    )
+
+    send_message(
+        chat_id,
+        (
+            "💬 <b>Contact Admin</b>\n\n"
+            "अपना message अगली message में भेजें।\n"
+            "मैं उसे admin तक forward कर दूँगा।\n\n"
+            "❌ Cancel करने के लिए /cancel भेजें।"
+        ),
+        main_keyboard()
+    )
+
+
+def forward_user_message(message):
+    if not ADMIN_ID:
+        return False
+
+    chat_id = message.get(
+        "chat",
+        {}
+    ).get("id")
+
+    if not chat_id:
+        return False
+
+    waiting = load_contact_waiting()
+
+    if str(chat_id) not in waiting:
+        return False
+
+    if message.get("text") == "/cancel":
+        waiting.discard(
+            str(chat_id)
         )
 
-    data = callback.get(
+        save_contact_waiting(
+            waiting
+        )
+
+        send_message(
+            chat_id,
+            "ठीक है 👍",
+            main_keyboard()
+        )
+
+        return True
+
+    result = telegram_request(
+        "forwardMessage",
+        {
+            "chat_id": ADMIN_ID,
+            "from_chat_id": chat_id,
+            "message_id": message.get(
+                "message_id"
+            )
+        }
+    )
+
+    if result and result.get("ok"):
+        waiting.discard(
+            str(chat_id)
+        )
+
+        save_contact_waiting(
+            waiting
+        )
+
+        send_message(
+            chat_id,
+            (
+                "✅ आपका message admin को भेज दिया गया है।\n"
+                "Admin reply आने पर आपको भेज दिया जाएगा।"
+            ),
+            main_keyboard()
+        )
+
+    return True
+
+
+def admin_reply_to_forward(message):
+    if not ADMIN_ID:
+        return False
+
+    chat_id = message.get(
+        "chat",
+        {}
+    ).get("id")
+
+    if str(chat_id) != str(ADMIN_ID):
+        return False
+
+    reply = message.get(
+        "reply_to_message"
+    )
+
+    if not reply:
+        return False
+
+    origin = reply.get(
+        "forward_origin"
+    )
+
+    if not origin:
+        origin = reply.get(
+            "forward_from"
+        )
+
+    if not isinstance(
+        origin,
+        dict
+    ):
+        return False
+
+    user_id = origin.get(
+        "sender_user",
+        {}
+    ).get("id")
+
+    if not user_id:
+        user_id = origin.get(
+            "id"
+        )
+
+    if not user_id:
+        return False
+
+    text = message.get(
+        "text"
+    )
+
+    if not text:
+        return False
+
+    result = send_message(
+        user_id,
+        (
+            "📩 <b>Admin Reply</b>\n\n"
+            + html.escape(text)
+        ),
+        main_keyboard()
+    )
+
+    if result and result.get("ok"):
+        send_message(
+            ADMIN_ID,
+            "✅ Reply user को भेज दिया गया।"
+        )
+
+    return True
+
+
+def admin_broadcast(text):
+    users = load_users()
+    sent = 0
+
+    for uid in users:
+        result = send_message(
+            uid,
+            (
+                "📢 <b>Admin Announcement</b>\n\n"
+                + html.escape(text)
+            ),
+            main_keyboard()
+        )
+
+        if result and result.get("ok"):
+            sent += 1
+
+    return sent
+
+
+def admin_poll(command):
+    # /poll Question | Option 1 | Option 2 | ...
+    body = command[5:].strip()
+
+    parts = [
+        part.strip()
+        for part in body.split("|")
+        if part.strip()
+    ]
+
+    if len(parts) < 3:
+        return (
+            "❌ Format:\n"
+            "/poll Question | Option 1 | Option 2"
+        )
+
+    question = parts[0]
+    options = parts[1:11]
+
+    users = load_users()
+    sent = 0
+
+    for uid in users:
+        result = telegram_request(
+            "sendPoll",
+            {
+                "chat_id": uid,
+                "question": question[:300],
+                "options": json.dumps(
+                    options,
+                    ensure_ascii=False
+                ),
+                "is_anonymous": True
+            }
+        )
+
+        if result and result.get("ok"):
+            sent += 1
+
+    return f"📊 Poll sent to {sent} users."
+
+# ============================================================
+# NEW NOTICES / ALL UPDATES
+# ============================================================
+
+def new_notices(chat_id):
+    items = load_latest()
+
+    if not items:
+        items = scan_all()
+
+    send_items(
+        chat_id,
+        items[-10:][::-1],
+        "Latest Government Exam Notices"
+    )
+
+
+def all_updates(chat_id):
+    items = scan_all()
+
+    send_items(
+        chat_id,
+        items[-10:][::-1],
+        "All Latest Government Exam Updates"
+    )
+
+# ============================================================
+# CALLBACK HANDLER
+# ============================================================
+
+def process_callback(query):
+    answer_callback(
+        query.get("id")
+    )
+
+    data = query.get(
         "data",
         ""
     )
 
-    message = callback.get(
+    chat_id = query.get(
         "message",
         {}
-    )
-
-    chat = message.get(
+    ).get(
         "chat",
         {}
-    )
-
-    chat_id = chat.get(
-        "id"
-    )
+    ).get("id")
 
     if not chat_id:
         return
 
-    # Security
-    if (
-        ADMIN_ID
-        and str(chat_id) != str(ADMIN_ID)
-    ):
-
+    if data == "BACK:EXAMS":
         send_message(
-
             chat_id,
-
-            "❌ <b>Unauthorized User</b>\n\n"
-            "यह private notice bot है।"
-
+            "📚 <b>Select Exam Board</b>",
+            exam_keyboard()
         )
-
         return
 
-    # Exam buttons
-    if data.startswith("EXAM_"):
+    if data.startswith("BOARD:"):
+        board = data.split(
+            ":",
+            1
+        )[1]
 
-        category = data.replace(
-            "EXAM_",
-            ""
+        if board == "ALL":
+            all_updates(chat_id)
+            return
+
+        send_message(
+            chat_id,
+            (
+                f"📚 <b>{html.escape(SOURCES[board]['name'])}</b>\n\n"
+                "अपना specific exam चुनें:"
+            ),
+            exam_list_keyboard(board)
+        )
+        return
+
+    if data.startswith("EXAM:"):
+        parts = data.split(
+            ":",
+            2
         )
 
-        if category == "ALL":
+        if len(parts) != 3:
+            return
 
-            send_latest(
+        _, board, exam_id = parts
+
+        exam = exam_from_id(
+            board,
+            exam_id
+        )
+
+        if not exam:
+            send_message(
                 chat_id,
+                "❌ Exam information नहीं मिली।",
+                main_keyboard()
+            )
+            return
+
+        send_message(
+            chat_id,
+            (
+                f"📌 <b>{html.escape(exam)}</b>\n\n"
+                "क्या जानकारी चाहिए?"
+            ),
+            info_keyboard(
+                board,
+                exam
+            )
+        )
+        return
+
+    if data.startswith("INFO:"):
+        parts = data.split(
+            ":",
+            3
+        )
+
+        if len(parts) != 4:
+            return
+
+        _, board, code, exam_id = parts
+
+        exam = exam_from_id(
+            board,
+            exam_id
+        )
+
+        if not exam:
+            return
+
+        items = search_updates(
+            board,
+            exam,
+            code
+        )
+
+        label = next(
+            (
+                label
+                for label, value
+                in INFO_TYPES
+                if value == code
+            ),
+            code
+        )
+
+        send_items(
+            chat_id,
+            items,
+            f"{exam} — {label}"
+        )
+        return
+
+    if data.startswith("FOLLOW:"):
+        parts = data.split(
+            ":",
+            2
+        )
+
+        if len(parts) != 3:
+            return
+
+        _, board, exam_id = parts
+
+        exam = exam_from_id(
+            board,
+            exam_id
+        )
+
+        if not exam:
+            return
+
+        changed = follow(
+            chat_id,
+            board,
+            exam
+        )
+
+        if changed:
+            text = (
+                "🔔 <b>Exam Followed</b>\n\n"
+                f"{html.escape(exam)}\n\n"
+                "New matching updates पर alert मिलेगा।"
+            )
+        else:
+            text = (
+                "ℹ️ <b>Already Following</b>\n\n"
+                f"{html.escape(exam)}"
+            )
+
+        send_message(
+            chat_id,
+            text,
+            main_keyboard()
+        )
+
+# ============================================================
+# FREE TEXT SEARCH
+# ============================================================
+
+def free_text_search(chat_id, text):
+    q = text.lower()
+
+    exam_terms = [
+        ("cgl", "CGL"),
+        ("chsl", "CHSL"),
+        ("mts", "MTS"),
+        ("ssc gd", "GD Constable"),
+        ("cpo", "CPO"),
+        ("ntpc", "NTPC"),
+        ("group d", "Group D"),
+        ("alp", "ALP"),
+        ("technician", "Technician"),
+        ("upsssc pet", "PET"),
+        ("pet", "PET"),
+        ("vdo", "VDO"),
+        ("lekhpal", "Lekhpal"),
+        ("nda", "NDA"),
+        ("cds", "CDS"),
+        ("capf", "CAPF"),
+        ("civil services", "Civil Services Examination (CSE)"),
+        ("upsc cse", "Civil Services Examination (CSE)"),
+        ("70th cce", "70th CCE"),
+        ("71st cce", "71st CCE"),
+        ("72nd cce", "72nd CCE")
+    ]
+
+    selected_exam = None
+
+    for keyword, exam in exam_terms:
+        if keyword in q:
+            selected_exam = exam
+            break
+
+    board = None
+
+    if "upsssc" in q:
+        board = "UPSSSC"
+    elif "bpsc" in q:
+        board = "BPSC"
+    elif "upsc" in q:
+        board = "UPSC"
+    elif "ssc" in q:
+        board = "SSC"
+    elif "railway" in q or "rrb" in q:
+        board = "RAILWAY"
+
+    if selected_exam:
+        if board is None:
+            for b, exams in EXAMS.items():
+                if selected_exam in exams:
+                    board = b
+                    break
+
+        if board:
+            items = search_updates(
+                board,
+                selected_exam,
                 "ALL"
             )
 
-            return
+            if items:
+                send_items(
+                    chat_id,
+                    items,
+                    f"{selected_exam} — Latest Updates"
+                )
+                return
 
-        send_latest(
+    # Generic word search in stored notices.
+    latest = load_latest()
+
+    words = [
+        word
+        for word in q.split()
+        if len(word) >= 3
+    ]
+
+    matches = []
+
+    for item in latest:
+        title = item.get(
+            "title",
+            ""
+        ).lower()
+
+        if words and all(
+            word in title
+            for word in words
+        ):
+            matches.append(item)
+
+    if matches:
+        send_items(
             chat_id,
-            category
+            matches[-10:][::-1],
+            f"Search: {text}"
         )
-
+    else:
+        send_message(
+            chat_id,
+            (
+                "🔎 <b>कोई matching update नहीं मिला।</b>\n\n"
+                "उदाहरण:\n"
+                "• SSC CGL\n"
+                "• SSC CHSL admit card\n"
+                "• UPSSSC PET\n"
+                "• Railway NTPC\n"
+                "• UPSC CSE result\n"
+                "• BPSC 72nd CCE"
+            ),
+            main_keyboard()
+        )
 
 # ============================================================
-# PROCESS TELEGRAM UPDATE
+# MESSAGE HANDLER
 # ============================================================
 
-def process_update(update):
+def process_message(message):
+    chat_id = message.get(
+        "chat",
+        {}
+    ).get("id")
 
-    try:
+    if not chat_id:
+        return
 
-        # Inline button
-        if "callback_query" in update:
+    user = message.get(
+        "from",
+        {}
+    )
 
-            handle_callback(
-                update["callback_query"]
-            )
+    save_user(
+        chat_id,
+        user
+    )
 
-            return
-
-        # Normal message
-        message = update.get(
-            "message"
-        )
-
-        if not message:
-            return
-
-        chat = message.get(
-            "chat",
-            {}
-        )
-
-        chat_id = chat.get(
-            "id"
-        )
-
-        text = message.get(
+    text = clean(
+        message.get(
             "text",
             ""
         )
+    )
 
-        if not chat_id:
+    # Admin functions.
+    if (
+        ADMIN_ID
+        and str(chat_id) == str(ADMIN_ID)
+    ):
+        if admin_reply_to_forward(message):
             return
 
-        # Security
-        if (
-            ADMIN_ID
-            and str(chat_id)
-            != str(ADMIN_ID)
-        ):
+        if text.startswith("/broadcast "):
+            sent = admin_broadcast(
+                text[len("/broadcast "):]
+            )
 
             send_message(
-
                 chat_id,
-
-                "❌ <b>Unauthorized User</b>\n\n"
-                "यह private notice bot है।"
-
+                f"📢 Broadcast sent: {sent}"
             )
-
             return
 
-        if text:
-
-            handle_text(
+        if text.startswith("/poll "):
+            send_message(
                 chat_id,
-                text
+                admin_poll(text)
             )
+            return
 
-    except Exception as e:
+    # Contact flow must be checked before generic search.
+    if text == "/cancel":
+        waiting = load_contact_waiting()
 
-        print(
-            "Update handling error:",
-            e
+        waiting.discard(
+            str(chat_id)
         )
 
+        save_contact_waiting(
+            waiting
+        )
+
+        send_message(
+            chat_id,
+            "ठीक है 👍",
+            main_keyboard()
+        )
+        return
+
+    if forward_user_message(message):
+        return
+
+    if text in [
+        "/start",
+        "start"
+    ]:
+        send_message(
+            chat_id,
+            (
+                "🇮🇳 <b>Government Exam Information Assistant</b>\n\n"
+                "नमस्ते! 👋\n"
+                "अपना exam चुनें या सीधे search करें।"
+            ),
+            main_keyboard()
+        )
+
+    elif text in [
+        "📚 Exams",
+        "Exams"
+    ]:
+        send_message(
+            chat_id,
+            "📚 <b>Select Exam Board</b>",
+            exam_keyboard()
+        )
+
+    elif text == "🆕 New Notices":
+        new_notices(
+            chat_id
+        )
+
+    elif text == "🔎 Search Exam":
+        send_message(
+            chat_id,
+            (
+                "🔎 <b>Exam Search</b>\n\n"
+                "Exam का नाम/type करें, जैसे:\n"
+                "• SSC CGL\n"
+                "• SSC CHSL\n"
+                "• MTS\n"
+                "• UPSSSC PET\n"
+                "• Railway NTPC\n"
+                "• UPSC CSE\n"
+                "• BPSC 72nd CCE"
+            ),
+            main_keyboard()
+        )
+
+    elif text == "🔔 My Follows":
+        send_follows(
+            chat_id
+        )
+
+    elif text == "📊 Status":
+        send_status(
+            chat_id
+        )
+
+    elif text == "❓ Help":
+        send_help(
+            chat_id
+        )
+
+    elif text == "💬 Contact Admin":
+        contact_admin(
+            chat_id
+        )
+
+    elif text == "🔔 All Updates":
+        all_updates(
+            chat_id
+        )
+
+    elif text.startswith("/"):
+        send_message(
+            chat_id,
+            "❓ Unknown command. /start दबाएँ।",
+            main_keyboard()
+        )
+
+    else:
+        free_text_search(
+            chat_id,
+            text
+        )
 
 # ============================================================
-# SCAN ALL SOURCES AND SEND NEW NOTICES
+# WEBHOOK / APP COMPATIBILITY
+# ============================================================
+
+def handle_update(update):
+    process_update(update)
+
+
+def process_update(update):
+    if "callback_query" in update:
+        process_callback(
+            update["callback_query"]
+        )
+    elif "message" in update:
+        process_message(
+            update["message"]
+        )
+
+# ============================================================
+# BACKGROUND SCANNER
 # ============================================================
 
 def scan_and_notify():
-
-    print("=" * 60)
-
-    print(
-        "GOVERNMENT EXAM NOTICE BOARD"
-    )
-
-    print(
-        "UPSC | SSC | RAILWAY | UPSSSC | BPSC"
-    )
-
-    print("=" * 60)
-
     seen = load_seen()
 
-    latest = load_latest()
+    fresh = scan_all()
 
-    all_new = []
+    new_items = [
+        item
+        for item in fresh
+        if item["id"] not in seen
+    ]
 
-    # Scan all websites
-    for source_key in SOURCES:
-
-        print(
-            f"Scanning {source_key}..."
+    for item in new_items:
+        seen.add(
+            item["id"]
         )
 
-        try:
-
-            items = scan_source(
-                source_key
-            )
-
-            print(
-                f"Relevant items found: "
-                f"{len(items)}"
-            )
-
-        except Exception as e:
-
-            print(
-                f"Scan error "
-                f"{source_key}: {e}"
-            )
-
-            continue
-
-        for item in items:
-
-            url = item.get(
-                "url"
-            )
-
-            if not url:
-                continue
-
-            if url in seen:
-                continue
-
-            all_new.append(
-                item
-            )
-
-    # Remove duplicates
-    unique_new = []
-
-    new_urls = set()
-
-    for item in all_new:
-
-        url = item.get(
-            "url"
-        )
-
-        if url in new_urls:
-            continue
-
-        new_urls.add(url)
-
-        unique_new.append(
-            item
-        )
-
-    all_new = unique_new
-
-    print(
-        f"Total NEW notices: "
-        f"{len(all_new)}"
-    )
-
-    sent_count = 0
-
-    for item in all_new:
-
-        url = item.get(
-            "url"
-        )
-
-        # Mark as seen
-        seen.add(url)
-
-        latest.append(item)
-
-        # Telegram alert limit
-        if sent_count >= MAX_ALERTS_PER_RUN:
-            continue
-
-        try:
-
-            success = send_new_notice(
-                item
-            )
-
-            if success:
-
-                sent_count += 1
-
-                print(
-                    "Sent:",
-                    item.get(
-                        "title",
-                        ""
-                    )
-                )
-
-                time.sleep(1)
-
-            else:
-
-                print(
-                    "Telegram send failed:",
-                    item.get(
-                        "title",
-                        ""
-                    )
-                )
-
-        except Exception as e:
-
-            print(
-                "Send error:",
-                e
-            )
-
-    # Save data
     save_seen(
         seen
     )
 
-    save_latest(
-        latest[-MAX_LATEST:]
+    if not new_items:
+        return []
+
+    limited = new_items[
+        :MAX_ALERTS_PER_RUN
+    ]
+
+    # Alert users who follow a matching exam.
+    notify_followers(
+        limited
     )
 
-    print(
-        f"Sent this run: "
-        f"{sent_count}"
-    )
+    # Admin gets every detected new item for review.
+    if ADMIN_ID:
+        for item in limited:
+            send_message(
+                ADMIN_ID,
+                (
+                    "🚨 <b>NEW GOVERNMENT EXAM NOTICE</b>\n\n"
+                    + format_item(item)
+                )
+            )
 
-    print(
-        "Monitoring completed."
-    )
+    return new_items
 
-
-# ============================================================
-# DIRECT TEST
-# ============================================================
 
 if __name__ == "__main__":
-
-    print(
-        "Bot module test started..."
-    )
-
-    if not BOT_TOKEN:
-
-        print(
-            "WARNING: BOT_TOKEN is missing"
-        )
-
-    if not ADMIN_ID:
-
-        print(
-            "WARNING: ADMIN_ID is missing"
-        )
-
-    print(
-        "Running notice scan..."
-    )
-
-    scan_and_notify()
+    print("bot.py loaded successfully")

@@ -48,52 +48,36 @@ app = Flask(__name__)
 # ------------------------------------------------------------
 SOURCES = {
     "UPSC": {
-        "name": "UPSC",
-        "url": "https://www.upsc.gov.in/whats-new",
-        "home": "https://www.upsc.gov.in/",
-        "priority": "official",
+        "name": "UPSC", "url": "https://www.upsc.gov.in/whats-new", "home": "https://www.upsc.gov.in/", "priority": "official",
+        "emoji": "🏛️", "scan_urls": ["https://www.upsc.gov.in/whats-new"],
     },
     "SSC": {
-        "name": "SSC",
-        "url": "https://ssc.gov.in/",
-        "home": "https://ssc.gov.in/",
-        "priority": "official",
+        "name": "SSC", "url": "https://ssc.gov.in/", "home": "https://ssc.gov.in/", "priority": "official",
+        "emoji": "📝", "scan_urls": ["https://ssc.gov.in/"],
     },
     "RAILWAY": {
-        "name": "Railway / RRB",
-        "url": "https://rrb.indianrailways.gov.in/",
-        "home": "https://www.rrcb.gov.in/rrbs.html",
-        "priority": "official",
+        "name": "Railway / RRB", "url": "https://www.rrbcdg.gov.in/", "home": "https://www.rrcb.gov.in/rrbs.html", "priority": "official",
+        "emoji": "🚆", "scan_urls": ["https://www.rrbcdg.gov.in/", "https://www.rrbcdg.gov.in/employment-notices.php"],
     },
     "UPSSSC": {
-        "name": "UPSSSC",
-        "url": "https://upsssc.gov.in/",
-        "home": "https://upsssc.gov.in/",
-        "priority": "official",
+        "name": "UPSSSC", "url": "https://upsssc.gov.in/", "home": "https://upsssc.gov.in/", "priority": "official",
+        "emoji": "🏢", "scan_urls": ["https://upsssc.gov.in/"],
     },
     "BPSC": {
-        "name": "BPSC",
-        "url": "https://bpsc.bihar.gov.in/",
-        "home": "https://bpsc.bihar.gov.in/",
-        "priority": "official",
+        "name": "BPSC", "url": "https://bpsc.bihar.gov.in/whats-new/", "home": "https://bpsc.bihar.gov.in/", "priority": "official",
+        "emoji": "🏛️", "scan_urls": ["https://bpsc.bihar.gov.in/whats-new/", "https://bpsc.bihar.gov.in/"],
     },
     "UPESSC": {
-        "name": "UP Education Service Selection Commission",
-        "url": "https://apply.upessc.org/",
-        "home": "https://apply.upessc.org/",
-        "priority": "official",
+        "name": "UP Education Service Selection Commission", "url": "https://apply.upessc.org/", "home": "https://apply.upessc.org/", "priority": "official",
+        "emoji": "👨‍🏫", "scan_urls": ["https://apply.upessc.org/"],
     },
     "CTET": {
-        "name": "CTET",
-        "url": "https://ctet.nic.in/",
-        "home": "https://ctet.nic.in/documents/",
-        "priority": "official",
+        "name": "CTET", "url": "https://ctet.nic.in/", "home": "https://ctet.nic.in/documents/", "priority": "official",
+        "emoji": "📚", "scan_urls": ["https://ctet.nic.in/", "https://ctet.nic.in/document-category/public-notices/"],
     },
     "UPTET": {
-        "name": "UPTET / U.P. Pariksha Niyamak Pradhikari",
-        "url": "https://updeled.gov.in/",
-        "home": "https://updeled.gov.in/",
-        "priority": "official",
+        "name": "UPTET / U.P. Pariksha Niyamak Pradhikari", "url": "https://updeled.gov.in/", "home": "https://updeled.gov.in/", "priority": "official",
+        "emoji": "👩‍🏫", "scan_urls": ["https://updeled.gov.in/"],
     },
 }
 
@@ -397,18 +381,24 @@ def notice_text(item):
 
 
 def format_notice(item):
-    badge = "🏛️ Official" if item.get("priority") == "official" else "🔎 Secondary / cross-check"
-    title = item.get("title", "Untitled")
-    source = source_label(item.get("source", ""))
+    source_key = item.get("source", "")
+    source = ALL_SOURCES.get(source_key, {})
+    badge = "🏛️ OFFICIAL" if item.get("priority") == "official" else "🔎 CROSS-CHECK"
+    emoji = source.get("emoji", "📌")
+    title = html.escape(item.get("title", "Untitled"))
+    source_name = html.escape(source_label(source_key))
     url = item.get("url", "")
-    desc = item.get("description", "")
-
-    text = f"{badge}\n\n<b>{html.escape(title)}</b>\n\n"
-    text += f"🏢 Source: {html.escape(source)}\n"
-    if desc:
-        text += f"📝 {html.escape(desc[:500])}\n"
+    desc = html.escape(clean_text(item.get("description", ""))[:420])
+    text = (
+        f"{badge}  {emoji}\n\n"
+        f"📢 <b>{title}</b>\n\n"
+        f"🏢 <b>Board:</b> {source_name}\n"
+    )
+    if desc and desc.lower() != item.get("title", "").lower():
+        text += f"📝 <b>Details:</b> {desc}\n"
+    text += f"🕒 <b>Detected:</b> {datetime.now().strftime('%d-%m-%Y %H:%M')}\n"
     if url:
-        text += f"\n🔗 {html.escape(url)}"
+        text += f'\n🔗 <a href="{html.escape(url, quote=True)}">Official / Source Link</a>'
     return text
 
 
@@ -448,8 +438,32 @@ def is_relevant_link(title, href):
     return any(k in text for k in keywords)
 
 
-def parse_source(source_key, source):
-    html_text = fetch_page(source["url"])
+def link_is_useful(title, href, context=""):
+    text = f"{title} {context} {href}".lower()
+    keywords = [
+        "notification", "notice", "advertisement", "vacancy", "recruit", "recruitment",
+        "application", "apply", "admit", "answer", "result", "exam", "corrigendum",
+        "cgl", "chsl", "mts", "gd", "ntpc", "railway", "rrb", "cen", "pet", "lekhpal",
+        "teacher", "tgt", "pgt", "tet", "ctet", "uptet", "deled", "bed", "group d",
+        "alp", "technician", "junior assistant", "stenographer", "cce", "bpsc", "upessc",
+        "important", "public notice", "what's new", "latest news", "new exam"
+    ]
+    return any(k in text for k in keywords)
+
+
+def context_text(tag):
+    parent = tag.parent
+    chunks = []
+    for node in [tag, parent, getattr(parent, "parent", None)]:
+        if node:
+            txt = clean_text(node.get_text(" ", strip=True))
+            if txt:
+                chunks.append(txt[:800])
+    return " | ".join(dict.fromkeys(chunks))
+
+
+def parse_one_page(source_key, source, page_url):
+    html_text = fetch_page(page_url)
     if not html_text:
         return []
 
@@ -457,71 +471,102 @@ def parse_source(source_key, source):
     items = []
     seen_local = set()
 
-    # Source-specific page hints. We still keep a safe generic fallback
-    # because official sites frequently change their HTML.
-    anchors = soup.find_all("a", href=True)
+    # 1) Tables are common on SSC/BPSC/RRB notice boards.
+    for tr in soup.find_all("tr"):
+        links = tr.find_all("a", href=True)
+        row_text = clean_text(tr.get_text(" ", strip=True))
+        for a in links:
+            title = clean_text(a.get_text(" ", strip=True)) or row_text
+            href = urljoin(page_url, a.get("href", "").strip())
+            if not title or len(title) < 4 or href.startswith(("javascript:", "#")):
+                continue
+            if href in seen_local or not link_is_useful(title, href, row_text):
+                continue
+            seen_local.add(href)
+            items.append({
+                "id": make_notice_id(source_key, title, href),
+                "source": source_key, "priority": source.get("priority", "official"),
+                "title": title[:300], "description": row_text[:700], "url": href,
+                "found_at": datetime.now(timezone.utc).isoformat(),
+            })
 
-    for a in anchors:
+    # 2) Normal links, using surrounding card/list text as context.
+    for a in soup.find_all("a", href=True):
         title = clean_text(a.get_text(" ", strip=True))
-        href = urljoin(source["url"], a.get("href", "").strip())
-
-        if not title or len(title) < 4:
-            continue
-        if href.startswith("javascript:") or href.startswith("#"):
+        href = urljoin(page_url, a.get("href", "").strip())
+        if not title or len(title) < 4 or href.startswith(("javascript:", "#")):
             continue
         if href in seen_local:
             continue
-        if not is_relevant_link(title, href):
+        context = context_text(a)
+        if not link_is_useful(title, href, context):
             continue
-
-        # Avoid obvious navigation/menu noise.
-        if title.lower() in {
-            "home", "login", "contact us", "about us", "sitemap",
-            "privacy policy", "terms", "menu", "search"
-        }:
+        if title.lower() in {"home", "login", "contact us", "about us", "sitemap", "privacy policy", "terms", "menu", "search", "view all"}:
             continue
-
         seen_local.add(href)
-
-        item = {
+        items.append({
             "id": make_notice_id(source_key, title, href),
-            "source": source_key,
-            "priority": source.get("priority", "official"),
-            "title": title[:300],
-            "description": "",
-            "url": href,
+            "source": source_key, "priority": source.get("priority", "official"),
+            "title": title[:300], "description": context[:700], "url": href,
             "found_at": datetime.now(timezone.utc).isoformat(),
-        }
-
-        items.append(item)
-
-        if len(items) >= 40:
+        })
+        if len(items) >= 60:
             break
+
+    # 3) Some portals expose important updates as cards/text without a link.
+    if source_key in {"UPESSC", "UPTET"}:
+        for tag in soup.find_all(["h1", "h2", "h3", "h4", "li"]):
+            txt = clean_text(tag.get_text(" ", strip=True))
+            if len(txt) < 8 or not link_is_useful(txt, page_url, txt):
+                continue
+            key = make_notice_id(source_key, txt, page_url)
+            if any(x["id"] == key for x in items):
+                continue
+            items.append({
+                "id": key, "source": source_key, "priority": "official",
+                "title": txt[:300], "description": txt[:700], "url": page_url,
+                "found_at": datetime.now(timezone.utc).isoformat(),
+            })
+            if len(items) >= 40:
+                break
 
     return items
 
 
+def parse_source(source_key, source):
+    combined = []
+    seen = set()
+    for page_url in source.get("scan_urls", [source["url"]]):
+        try:
+            found = parse_one_page(source_key, source, page_url)
+            for item in found:
+                if item["id"] not in seen:
+                    seen.add(item["id"])
+                    combined.append(item)
+        except Exception as e:
+            print("Page parse error:", source_key, page_url, e)
+    return combined[:80]
+
+
 def scan_all_sources():
-    """
-    Scan official sources first, then secondary sources.
-    Official items are inserted before secondary items.
-    """
+    """Scan each official board independently so UPSC cannot dominate results."""
     official_items = []
     secondary_items = []
 
     for key, source in SOURCES.items():
         try:
             found = parse_source(key, source)
-            official_items.extend(found)
-            print(f"{key}: {len(found)}")
+            # Per-board cap keeps Latest Notices balanced across boards.
+            official_items.extend(found[:25])
+            print(f"{key}: {len(found)} (kept {min(len(found),25)})")
         except Exception as e:
             print("Source error:", key, e)
 
     for key, source in SECONDARY_SOURCES.items():
         try:
             found = parse_source(key, source)
-            secondary_items.extend(found)
-            print(f"{key}: {len(found)}")
+            secondary_items.extend(found[:10])
+            print(f"Secondary {key}: {len(found)}")
         except Exception as e:
             print("Secondary source error:", key, e)
 
@@ -687,7 +732,7 @@ def get_profile(user_id):
 def show_exams(chat_id):
     rows = []
     for key, values in EXAMS.items():
-        rows.append([f"🏛️ {key}"])
+        rows.append([f"{SOURCES.get(key, {}).get('emoji', '🏛️')} {key}"])
     rows.append(["⬅️ Main Menu"])
     send_message(
         chat_id,
@@ -726,13 +771,16 @@ def show_results(chat_id, items, heading="📢 Results"):
     if not items:
         send_message(
             chat_id,
-            f"{heading}\n\n❌ Matching notice नहीं मिला.\n\n"
-            "Official source पर नया update आने के बाद अगली scan में दिखाई देगा.",
+            f"{heading}\n\n"
+            "❌ <b>अभी matching update नहीं मिला.</b>\n\n"
+            "🔄 Official websites की अगली scan में नया update आने पर यहाँ दिखाई देगा.\n"
+            "🏛️ Official source को प्राथमिकता दी जाती है.",
             MAIN_KB,
         )
         return
 
-    send_message(chat_id, f"{heading}\n\nकुल {len(items)} result मिले.")
+    send_message(chat_id, f"{heading}\n\n📌 <b>{len(items)} updates मिले.</b>\n\n"
+        "🏛️ Official updates को ऊपर प्राथमिकता दी गई है.")
     for item in items[:10]:
         send_message(chat_id, format_notice(item))
 
@@ -745,9 +793,10 @@ def start(chat_id, user):
     send_message(
         chat_id,
         "👋 <b>नमस्ते!</b>\n\n"
-        "मैं <b>Government Job & Exam Assistant</b> हूँ.\n\n"
-        "मैं UPSC, SSC, Railway, UPSSSC, BPSC के साथ "
-        "UPESSC, TGT, PGT, TET और CTET updates खोजता हूँ.\n\n"
+        "🤖 मैं <b>Government Job & Exam Assistant</b> हूँ.\n\n"
+        "🏛️ UPSC  |  📝 SSC  |  🚆 Railway/RRB\n"
+        "🏢 UPSSSC  |  🏛️ BPSC  |  👨‍🏫 UPESSC\n"
+        "📚 CTET  |  👩‍🏫 UPTET  |  TGT / PGT / TET\n\n"
         "🎓 अपनी qualification save करके matching jobs भी खोज सकते हो.\n\n"
         "नीचे menu से शुरू करो 👇",
         MAIN_KB,
@@ -872,6 +921,14 @@ def show_status(chat_id):
     follows = get_follows()
 
     follow_count = sum(len(v) for v in follows.values())
+    source_counts = {}
+    for item in latest:
+        key = item.get("source", "?")
+        source_counts[key] = source_counts.get(key, 0) + 1
+    board_lines = "\n".join(
+        f"{ALL_SOURCES.get(k, {}).get('emoji','📌')} {source_label(k)}: {v}"
+        for k, v in sorted(source_counts.items(), key=lambda x: (-x[1], x[0]))
+    ) or "—"
 
     send_message(
         chat_id,
@@ -884,7 +941,8 @@ def show_status(chat_id):
         f"📰 Latest Saved: {len(latest)}\n"
         f"👤 Users: {len(users)}\n"
         f"🔔 Active Follows: {follow_count}\n"
-        f"⏱️ Scan Interval: {SCAN_INTERVAL // 60} min",
+        f"⏱️ Scan Interval: {SCAN_INTERVAL // 60} min\n\n"
+        "<b>📊 Latest by Board</b>\n" + board_lines,
         MAIN_KB,
     )
 
@@ -900,7 +958,7 @@ PENDING_BOARD = {}
 def handle_exam_button(chat_id, user_id, text):
     # Board selection
     if text.startswith("🏛️ "):
-        board = text.replace("🏛️ ", "", 1).strip()
+        board = re.sub(r"^[^A-Za-z]+", "", text).strip()
         if board in EXAMS:
             PENDING_BOARD[user_id] = board
             show_board_exams(chat_id, board)
@@ -1067,8 +1125,8 @@ def send_follow_alerts(new_items):
             if matched_exam:
                 send_message(
                     uid,
-                    "🔔 <b>New Exam Update</b>\n\n"
-                    f"📚 {html.escape(matched_exam)}\n\n"
+                    "🚨 <b>NEW UPDATE FOR YOUR FOLLOWED EXAM</b>\n\n"
+                    f"🔔 <b>{html.escape(matched_exam)}</b>\n\n"
                     + format_notice(item),
                     MAIN_KB,
                 )
@@ -1094,45 +1152,64 @@ def scan_and_store():
 
     seen = load_json(SEEN_FILE, [])
     seen_set = set(seen)
-
-    latest = load_json(LATEST_FILE, [])
+    old_latest = load_json(LATEST_FILE, [])
     new_items = []
 
-    # Official sources first.
+    # Detect genuinely new items first.
     for item in all_items:
         item_id = item["id"]
-
         if item_id not in seen_set:
             new_items.append(item)
             seen.append(item_id)
             seen_set.add(item_id)
 
-        latest = [x for x in latest if x.get("id") != item_id]
-        latest.insert(0, item)
+    # Keep the latest board-balanced snapshot instead of allowing one board
+    # (especially UPSC) to occupy the entire Latest list.
+    by_source = {}
+    for item in all_items:
+        by_source.setdefault(item.get("source", "UNKNOWN"), []).append(item)
 
-    latest = latest[:MAX_LATEST]
-    seen = seen[-5000:]
+    balanced = []
+    source_keys = list(by_source.keys())
+    for round_no in range(25):
+        for key in source_keys:
+            arr = by_source.get(key, [])
+            if round_no < len(arr):
+                balanced.append(arr[round_no])
+                if len(balanced) >= MAX_LATEST:
+                    break
+        if len(balanced) >= MAX_LATEST:
+            break
 
-    save_json(SEEN_FILE, seen)
-    save_json(LATEST_FILE, latest)
+    # Keep older items only when they are not already represented, filling
+    # remaining slots without upsetting the current board balance.
+    represented = {x.get("id") for x in balanced}
+    for item in old_latest:
+        if len(balanced) >= MAX_LATEST:
+            break
+        if item.get("id") not in represented:
+            balanced.append(item)
+            represented.add(item.get("id"))
 
-    # Admin gets a compact digest of genuinely new official items.
-    official_new = [
-        x for x in new_items if x.get("priority") == "official"
-    ][:MAX_ALERTS_PER_RUN]
+    save_json(SEEN_FILE, seen[-5000:])
+    save_json(LATEST_FILE, balanced[:MAX_LATEST])
+
+    official_new = [x for x in new_items if x.get("priority") == "official"][:MAX_ALERTS_PER_RUN]
 
     if official_new and ADMIN_ID:
         send_message(
             ADMIN_ID,
-            f"🆕 <b>{len(official_new)} new official updates detected</b>",
+            "🚨 <b>NEW OFFICIAL UPDATES</b>\n\n"
+            f"📌 {len(official_new)} नए official updates मिले.\n"
+            "🏛️ Board-wise scan complete.",
             MAIN_KB,
         )
         for item in official_new:
             send_message(ADMIN_ID, format_notice(item), MAIN_KB)
 
     print(
-        f"Scan complete: total={len(all_items)}, "
-        f"new={len(new_items)}, official_new={len(official_new)}"
+        f"Scan complete: total={len(all_items)}, new={len(new_items)}, "
+        f"official_new={len(official_new)}, balanced_latest={len(balanced)}"
     )
     return new_items
 
@@ -1170,6 +1247,16 @@ def process_update(update):
 
         if text.startswith("/poll "):
             admin_poll(chat_id, text[len("/poll "):].strip())
+            return
+
+        if text == "/scan":
+            send_message(chat_id, "🔄 <b>Manual scan शुरू...</b>\n\n🏛️ सभी official boards check किए जा रहे हैं.", MAIN_KB)
+            try:
+                new_items = scan_and_store()
+                send_follow_alerts(new_items)
+                send_message(chat_id, f"✅ <b>Scan complete</b>\n\n🆕 New items: {len(new_items)}", MAIN_KB)
+            except Exception as e:
+                send_message(chat_id, f"❌ Scan error: <code>{html.escape(str(e))}</code>", MAIN_KB)
             return
 
         # Admin reply flow: reply to a message containing USER_ID.

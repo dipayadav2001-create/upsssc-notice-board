@@ -957,9 +957,11 @@ PENDING_BOARD = {}
 
 def handle_exam_button(chat_id, user_id, text):
     # Board selection
-    if text.startswith("🏛️ "):
-        board = re.sub(r"^[^A-Za-z]+", "", text).strip()
-        if board in EXAMS:
+    # Accept the actual emoji used by each board, not only 🏛️.
+    # This fixes SSC/Railway/UPSSSC/BPSC/UPESSC/CTET/UPTET buttons.
+    for board in EXAMS:
+        expected = f"{SOURCES.get(board, {}).get('emoji', '🏛️')} {board}"
+        if text == expected or text.strip() == board:
             PENDING_BOARD[user_id] = board
             show_board_exams(chat_id, board)
             return True

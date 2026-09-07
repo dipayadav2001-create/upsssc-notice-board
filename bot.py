@@ -3,8 +3,9 @@ import json
 import random
 import sqlite3
 import time
+import asyncio
 import threading
-from datetime import datetime, timezone
+
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from telegram import (
@@ -13,6 +14,7 @@ from telegram import (
     InlineKeyboardMarkup,
     ReplyKeyboardRemove,
 )
+
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -20,198 +22,215 @@ from telegram.ext import (
     ContextTypes,
 )
 
+
+# =========================================================
+# CONFIG
+# =========================================================
+
 TOKEN = os.getenv("BOT_TOKEN")
-DB_PATH = os.getenv("DB_PATH", "exam_prep.db")
-PORT = int(os.getenv("PORT", "10000"))
+
+DB_PATH = os.getenv(
+    "DB_PATH",
+    "exam_prep.db"
+)
+
+PORT = int(
+    os.getenv("PORT", "10000")
+)
 
 EXAM = "SSC CGL"
+
 MOCK_NAME = "SSC CGL Tier-I"
 
-SECTIONS = [
-    ("General Intelligence & Reasoning", "Reasoning"),
-    ("General Awareness", "General Awareness"),
-    ("Quantitative Aptitude", "Maths"),
-    ("English Comprehension", "English"),
-]
-
 QUESTIONS_PER_SECTION = 25
+
 SECTION_TIME = 15 * 60
+
+TOTAL_QUESTIONS = 100
+
+MARKS_PER_QUESTION = 2
+
 NEGATIVE_MARK = 0.50
+
+SECTIONS = [
+    (
+        "General Intelligence & Reasoning",
+        "Reasoning"
+    ),
+    (
+        "General Awareness",
+        "General Awareness"
+    ),
+    (
+        "Quantitative Aptitude",
+        "Maths"
+    ),
+    (
+        "English Comprehension",
+        "English"
+    ),
+]
 
 
 # =========================================================
-# RENDER HEALTH SERVER
+# HEALTH SERVER - FOR RENDER
 # =========================================================
 
 class HealthHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
-        if self.path in ("/", "/health"):
-            body = b"EXAMPREP OK"
 
-            self.send_response(200)
-            self.send_header(
-                "Content-Type",
-                "text/plain; charset=utf-8"
-            )
-            self.send_header(
-                "Content-Length",
-                str(len(body))
-            )
-            self.end_headers()
+        self.send_response(200)
+        self.send_header(
+            "Content-Type",
+            "text/plain"
+        )
+        self.end_headers()
 
-            self.wfile.write(body)
+        self.wfile.write(
+            b"EXAMPREP BOT IS RUNNING"
+        )
 
-        else:
-            self.send_response(404)
-            self.end_headers()
-
-    def log_message(self, *args):
+    def log_message(
+        self,
+        format,
+        *args
+    ):
         return
 
 
 def start_health_server():
+
     server = ThreadingHTTPServer(
-        ("0.0.0.0", PORT),
+        (
+            "0.0.0.0",
+            PORT
+        ),
         HealthHandler
     )
 
-    print(
-        f"Health server running on "
-        f"0.0.0.0:{PORT}"
-    )
+    server.serve_forever()
 
-    thread = threading.Thread(
-        target=server.serve_forever,
-        daemon=True
-    )
 
-    thread.start()
-
-    return server
+threading.Thread(
+    target=start_health_server,
+    daemon=True
+).start()
 
 
 # =========================================================
 # DATABASE
 # =========================================================
 
-def db():
-    con = sqlite3.connect(DB_PATH)
-    con.row_factory = sqlite3.Row
-    return con
+def get_db():
+
+    conn = sqlite3.connect(
+        DB_PATH
+    )
+
+    conn.row_factory = sqlite3.Row
+
+    return conn
 
 
 def init_db():
 
-    con = db()
+    conn = get_db()
 
-    con.execute("""
+    cur = conn.cursor()
+
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
-            name TEXT,
-            target_exam TEXT DEFAULT 'SSC CGL',
-            created_at TEXT
+            first_name TEXT,
+            username TEXT,
+            created_at INTEGER
         )
     """)
 
-    con.execute("""
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS questions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            exam TEXT NOT NULL,
-            subject TEXT NOT NULL,
+            exam TEXT,
+            subject TEXT,
             topic TEXT,
-            question TEXT NOT NULL,
-            options TEXT NOT NULL,
-            answer INTEGER NOT NULL,
+            question TEXT UNIQUE,
+            options TEXT,
+            answer INTEGER,
             explanation TEXT,
-            kind TEXT DEFAULT 'Practice',
-            year INTEGER,
-            shift TEXT,
-            source TEXT,
+            kind TEXT,
             verified INTEGER DEFAULT 0,
-            difficulty TEXT DEFAULT 'Mixed'
+            source TEXT
         )
     """)
 
-    con.execute("""
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS attempts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
             exam TEXT,
-            mode TEXT,
-            score REAL,
-            total INTEGER,
+            total_questions INTEGER,
+            attempted INTEGER,
             correct INTEGER,
             wrong INTEGER,
             skipped INTEGER,
-            seconds INTEGER,
-            negative_marks REAL,
+            score REAL,
             accuracy REAL,
-            created_at TEXT
+            total_time INTEGER,
+            created_at INTEGER
         )
     """)
 
-    con.execute("""
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS answers (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             attempt_id INTEGER,
+            user_id INTEGER,
             question_id INTEGER,
             selected INTEGER,
             correct INTEGER,
-            seconds INTEGER,
-            marked_review INTEGER DEFAULT 0
+            seconds INTEGER
         )
     """)
 
-    con.execute("""
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS saved_questions (
             user_id INTEGER,
             question_id INTEGER,
-            created_at TEXT,
-            PRIMARY KEY(user_id, question_id)
+            UNIQUE(user_id, question_id)
         )
     """)
 
-    con.execute("""
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS wrong_questions (
             user_id INTEGER,
             question_id INTEGER,
-            created_at TEXT,
-            PRIMARY KEY(user_id, question_id)
+            UNIQUE(user_id, question_id)
         )
     """)
 
-    con.commit()
+    conn.commit()
 
-    load_question_bank(con)
+    conn.close()
 
-    con.close()
+
+init_db()
 
 
 # =========================================================
 # QUESTION BANK
 # =========================================================
 
-def load_question_bank(con):
+def load_question_bank():
 
-    count = con.execute("""
-        SELECT COUNT(*)
-        FROM questions
-        WHERE exam=?
-    """, (EXAM,)).fetchone()[0]
-
-    if count >= 100:
-        return
-
-    path = os.path.join(
-        os.path.dirname(
-            os.path.abspath(__file__)
-        ),
-        "question_bank.json"
-    )
+    path = "question_bank.json"
 
     if not os.path.exists(path):
-        print("question_bank.json not found")
+
+        print(
+            "WARNING: question_bank.json not found."
+        )
+
         return
 
     try:
@@ -221,70 +240,133 @@ def load_question_bank(con):
             "r",
             encoding="utf-8"
         ) as f:
-            data = json.load(f)
+
+            bank = json.load(f)
 
     except Exception as e:
-        print("Question bank error:", e)
+
+        print(
+            "Question bank error:",
+            e
+        )
+
         return
 
-    for item in data:
+    conn = get_db()
 
-        exists = con.execute("""
-            SELECT id
-            FROM questions
-            WHERE exam=?
-            AND question=?
-            LIMIT 1
-        """, (
-            item.get("exam", EXAM),
-            item["question"]
-        )).fetchone()
+    cur = conn.cursor()
 
-        if exists:
-            continue
+    inserted = 0
 
-        con.execute("""
-            INSERT INTO questions (
-                exam,
-                subject,
-                topic,
-                question,
-                options,
-                answer,
-                explanation,
-                kind,
-                year,
-                shift,
-                source,
-                verified,
-                difficulty
+    for q in bank:
+
+        try:
+
+            cur.execute("""
+                INSERT OR IGNORE INTO questions
+                (
+                    exam,
+                    subject,
+                    topic,
+                    question,
+                    options,
+                    answer,
+                    explanation,
+                    kind,
+                    verified,
+                    source
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                q.get(
+                    "exam",
+                    EXAM
+                ),
+                q.get(
+                    "subject",
+                    ""
+                ),
+                q.get(
+                    "topic",
+                    ""
+                ),
+                q.get(
+                    "question",
+                    ""
+                ),
+                json.dumps(
+                    q.get(
+                        "options",
+                        []
+                    ),
+                    ensure_ascii=False
+                ),
+                int(
+                    q.get(
+                        "answer",
+                        0
+                    )
+                ),
+                q.get(
+                    "explanation",
+                    ""
+                ),
+                q.get(
+                    "kind",
+                    "Practice"
+                ),
+                int(
+                    q.get(
+                        "verified",
+                        0
+                    )
+                ),
+                q.get(
+                    "source",
+                    "Original Practice Question"
+                )
+            ))
+
+            if cur.rowcount:
+
+                inserted += 1
+
+        except Exception as e:
+
+            print(
+                "Question insert error:",
+                e
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+
+    conn.commit()
+
+    # Show section counts
+    for _, subject in SECTIONS:
+
+        cur.execute("""
+            SELECT COUNT(*)
+            FROM questions
+            WHERE exam = ?
+            AND subject = ?
         """, (
-            item.get("exam", EXAM),
-            item["subject"],
-            item.get("topic", "General"),
-            item["question"],
-            json.dumps(
-                item["options"],
-                ensure_ascii=False
-            ),
-            int(item["answer"]),
-            item.get("explanation", ""),
-            item.get("kind", "Practice"),
-            item.get("year"),
-            item.get("shift"),
-            item.get("source"),
-            int(item.get("verified", 0)),
-            item.get("difficulty", "Mixed")
+            EXAM,
+            subject
         ))
 
-    con.commit()
+        count = cur.fetchone()[0]
+
+        print(
+            f"{subject}: {count} questions"
+        )
+
+    conn.close()
 
     print(
-        "Question bank loaded:",
-        len(data)
+        f"Question bank loaded. New questions: {inserted}"
     )
+
+
+load_question_bank()
 
 
 # =========================================================
@@ -293,36 +375,47 @@ def load_question_bank(con):
 
 def save_user(user):
 
-    con = db()
+    if not user:
+        return
 
-    con.execute("""
-        INSERT OR IGNORE INTO users
-        (user_id, name, target_exam, created_at)
-        VALUES (?, ?, ?, ?)
+    conn = get_db()
+
+    conn.execute("""
+        INSERT OR REPLACE INTO users
+        (
+            user_id,
+            first_name,
+            username,
+            created_at
+        )
+        VALUES (
+            ?,
+            ?,
+            ?,
+            COALESCE(
+                (
+                    SELECT created_at
+                    FROM users
+                    WHERE user_id = ?
+                ),
+                ?
+            )
+        )
     """, (
         user.id,
-        user.first_name or "Aspirant",
-        EXAM,
-        datetime.now(
-            timezone.utc
-        ).isoformat()
+        user.first_name or "",
+        user.username or "",
+        user.id,
+        int(time.time())
     ))
 
-    con.execute("""
-        UPDATE users
-        SET name=?
-        WHERE user_id=?
-    """, (
-        user.first_name or "Aspirant",
-        user.id
-    ))
+    conn.commit()
 
-    con.commit()
-    con.close()
+    conn.close()
 
 
 # =========================================================
-# KEYBOARDS
+# HOME
 # =========================================================
 
 def home_keyboard():
@@ -354,7 +447,7 @@ def home_keyboard():
         [
             InlineKeyboardButton(
                 "📰 Current Affairs",
-                callback_data="ca"
+                callback_data="current_affairs"
             )
         ],
 
@@ -373,18 +466,21 @@ def home_keyboard():
             InlineKeyboardButton(
                 "🔖 Saved Questions",
                 callback_data="saved"
-            ),
-            InlineKeyboardButton(
-                "🏆 Leaderboard",
-                callback_data="leaderboard"
             )
         ],
 
         [
             InlineKeyboardButton(
+                "🏆 Leaderboard",
+                callback_data="leaderboard"
+            ),
+            InlineKeyboardButton(
                 "👤 Profile",
                 callback_data="profile"
-            ),
+            )
+        ],
+
+        [
             InlineKeyboardButton(
                 "❓ Help",
                 callback_data="help"
@@ -393,9 +489,50 @@ def home_keyboard():
     ])
 
 
-def home_button():
+async def start(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
 
-    return InlineKeyboardMarkup([
+    save_user(
+        update.effective_user
+    )
+
+    context.user_data.clear()
+
+    text = """
+🎯 EXAMPREP
+
+Welcome to your Competitive Exam Practice Platform! 🇮🇳
+
+📚 Exam: SSC CGL
+
+Choose an option below:
+"""
+
+    await update.message.reply_text(
+        text,
+        reply_markup=ReplyKeyboardRemove()
+    )
+
+    await update.message.reply_text(
+        "👇 Main Menu",
+        reply_markup=home_keyboard()
+    )
+
+
+# =========================================================
+# SIMPLE MENU
+# =========================================================
+
+async def simple_menu(
+    query,
+    title,
+    body
+):
+
+    keyboard = InlineKeyboardMarkup([
+
         [
             InlineKeyboardButton(
                 "🏠 Home",
@@ -404,56 +541,9 @@ def home_button():
         ]
     ])
 
-
-# =========================================================
-# START
-# =========================================================
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    save_user(update.effective_user)
-
-    context.user_data.clear()
-
-    text = f"""
-🧠 EXAMPREP
-
-नमस्ते 👋
-
-🎯 अभी focus: {EXAM}
-
-⚡ Quiz और 📝 Mock Test अलग-अलग हैं।
-
-⚡ Quiz = Practice
-📝 Mock Test = Real Exam Simulation
-
-नीचे से अपना विकल्प चुनें:
-"""
-
-    await update.message.reply_text(
-        text,
-        reply_markup=home_keyboard(),
-        reply_markup_remove=False
-    )
-
-
-# =========================================================
-# HOME
-# =========================================================
-
-async def show_home(query):
-
-    text = """
-🧠 EXAMPREP
-
-🎯 SSC CGL Preparation
-
-अपना विकल्प चुनें:
-"""
-
     await query.edit_message_text(
-        text,
-        reply_markup=home_keyboard()
+        f"{title}\n\n{body}",
+        reply_markup=keyboard
     )
 
 
@@ -461,111 +551,63 @@ async def show_home(query):
 # MOCK INTRO
 # =========================================================
 
-async def mock_intro(query):
-
-    con = db()
-
-    sections_ok = True
-
-    for subject, short in SECTIONS:
-
-        count = con.execute("""
-            SELECT COUNT(*)
-            FROM questions
-            WHERE exam=?
-            AND subject=?
-        """, (
-            EXAM,
-            subject
-        )).fetchone()[0]
-
-        if count < QUESTIONS_PER_SECTION:
-            sections_ok = False
-
-    total = con.execute("""
-        SELECT COUNT(*)
-        FROM questions
-        WHERE exam=?
-    """, (EXAM,)).fetchone()[0]
-
-    con.close()
-
-    if not sections_ok:
-
-        await query.edit_message_text(
-            f"""
-📝 {MOCK_NAME}
-
-⚠️ अभी पूरा mock तैयार नहीं है।
-
-Question Bank:
-{total}/100 questions available
-
-हर section में 25 questions चाहिए।
-
-📌 पहले question bank पूरा load करना होगा।
-""",
-            reply_markup=InlineKeyboardMarkup([
-                [
-                    InlineKeyboardButton(
-                        "📥 Import Guide",
-                        callback_data="import"
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        "🏠 Home",
-                        callback_data="home"
-                    )
-                ]
-            ])
-        )
-
-        return
+async def mock_intro(
+    query
+):
 
     text = f"""
 📝 {MOCK_NAME}
 
-📌 परीक्षा pattern
+SSC CGL Tier-I pattern:
 
-• Total Questions: 100
-• Total Marks: 200
-• Total Time: 60 minutes
+🧠 General Intelligence & Reasoning
+25 Questions
 
-📚 Sections:
+🌍 General Awareness
+25 Questions
 
-1️⃣ Reasoning — 25
-2️⃣ General Awareness — 25
-3️⃣ Maths — 25
-4️⃣ English — 25
+🔢 Quantitative Aptitude
+25 Questions
 
-⏱️ प्रत्येक section: 15 minutes
+🇬🇧 English Comprehension
+25 Questions
 
-➖ Wrong Answer: -0.50 marks
+━━━━━━━━━━━━━━━━━━
 
-⏭️ Section timer समाप्त होने पर
-अगले section में automatically जाएंगे।
+📌 Total Questions: 100
+📌 Total Marks: 200
+📌 Total Time: 60 Minutes
 
-⚠️ एक बार mock शुरू करने के बाद
-exam mode में वापस नहीं जा सकते।
+⏱️ Each section:
+15 Minutes
+
+❌ Negative Marking:
+0.50 marks per wrong answer
+
+⚠️ Section का समय खत्म होने पर
+अगला section automatically शुरू होगा.
 """
+
+    keyboard = InlineKeyboardMarkup([
+
+        [
+            InlineKeyboardButton(
+                "🚀 Start Mock Test",
+                callback_data="mock_start"
+            )
+        ],
+
+        [
+            InlineKeyboardButton(
+                "🏠 Home",
+                callback_data="home"
+            )
+        ]
+    ])
 
     await query.edit_message_text(
         text,
-        reply_markup=InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton(
-                    "🚀 Start Mock",
-                    callback_data="mock_start"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "🏠 Home",
-                    callback_data="home"
-                )
-            ]
-        ])
+        reply_markup=keyboard
     )
 
 
@@ -573,92 +615,205 @@ exam mode में वापस नहीं जा सकते।
 # CREATE MOCK
 # =========================================================
 
-def create_mock(user_id):
+def create_mock():
 
-    con = db()
+    conn = get_db()
 
-    questions = []
+    cur = conn.cursor()
 
-    for subject, short in SECTIONS:
+    all_questions = []
 
-        rows = con.execute("""
+    for section_name, subject in SECTIONS:
+
+        cur.execute("""
             SELECT *
             FROM questions
-            WHERE exam=?
-            AND subject=?
+            WHERE exam = ?
+            AND subject = ?
             ORDER BY RANDOM()
             LIMIT ?
         """, (
             EXAM,
             subject,
             QUESTIONS_PER_SECTION
-        )).fetchall()
+        ))
 
-        if len(rows) != QUESTIONS_PER_SECTION:
-            con.close()
+        rows = cur.fetchall()
+
+        if len(rows) < QUESTIONS_PER_SECTION:
+
+            conn.close()
+
             return None
 
-        questions.extend(
-            [dict(r) for r in rows]
+        all_questions.extend(
+            [dict(row) for row in rows]
         )
 
-    con.close()
+    conn.close()
 
-    return questions
+    return all_questions
 
 
 # =========================================================
-# SHOW QUESTION
+# CURRENT SECTION
+# =========================================================
+
+def get_current_section(context):
+
+    return context.user_data.get(
+        "current_section",
+        0
+    )
+
+
+def get_section_range(section_index):
+
+    start = (
+        section_index
+        * QUESTIONS_PER_SECTION
+    )
+
+    end = (
+        start
+        + QUESTIONS_PER_SECTION
+        - 1
+    )
+
+    return start, end
+
+
+# =========================================================
+# QUESTION TIMER
+# =========================================================
+
+def remaining_time(context):
+
+    deadline = context.user_data.get(
+        "section_deadline"
+    )
+
+    if not deadline:
+
+        return SECTION_TIME
+
+    return max(
+        0,
+        int(
+            deadline - time.time()
+        )
+    )
+
+
+# =========================================================
+# QUESTION SCREEN
 # =========================================================
 
 async def show_question(
     query,
-    context,
-    edit=True
+    context
 ):
 
     questions = context.user_data.get(
         "mock_questions"
     )
 
+    if not questions:
+        return
+
     index = context.user_data.get(
         "mock_index",
         0
     )
 
-    if not questions:
-        return
+    current_section = get_current_section(
+        context
+    )
+
+    section_start, section_end = (
+        get_section_range(
+            current_section
+        )
+    )
+
+    # Safety
+    if index < section_start:
+        index = section_start
+
+    if index > section_end:
+        index = section_end
+
+    context.user_data[
+        "mock_index"
+    ] = index
 
     q = questions[index]
 
-    options = json.loads(q["options"])
+    options = json.loads(
+        q["options"]
+    )
 
-    selected = context.user_data.get(
+    answers = context.user_data.setdefault(
         "answers",
         {}
-    ).get(str(q["id"]))
+    )
 
-    section_index = index // QUESTIONS_PER_SECTION
+    selected = answers.get(
+        str(q["id"])
+    )
 
-    section_name = SECTIONS[
-        section_index
-    ][1]
+    remaining = remaining_time(
+        context
+    )
 
-    number = index + 1
+    minutes = remaining // 60
+    seconds = remaining % 60
+
+    if remaining <= 60:
+
+        timer = (
+            f"🔴 Time Left: "
+            f"{minutes:02d}:{seconds:02d}"
+        )
+
+    elif remaining <= 300:
+
+        timer = (
+            f"🟠 Time Left: "
+            f"{minutes:02d}:{seconds:02d}"
+        )
+
+    else:
+
+        timer = (
+            f"⏱️ Time Left: "
+            f"{minutes:02d}:{seconds:02d}"
+        )
+
+    section_title = SECTIONS[
+        current_section
+    ][0]
 
     text = f"""
 📝 {MOCK_NAME}
 
-📚 Section: {section_name}
+📚 Section {current_section + 1}/4
+{section_title}
 
-❓ Question {number}/100
+{timer}
+
+━━━━━━━━━━━━━━━━━━
+
+❓ Question {index + 1}/{TOTAL_QUESTIONS}
 
 {q["question"]}
 """
 
     buttons = []
 
-    for i, option in enumerate(options):
+    for i, option in enumerate(
+        options
+    ):
 
         prefix = "▫️"
 
@@ -674,7 +829,8 @@ async def show_question(
 
     nav = []
 
-    if index > 0:
+    if index > section_start:
+
         nav.append(
             InlineKeyboardButton(
                 "⬅️ Previous",
@@ -682,7 +838,8 @@ async def show_question(
             )
         )
 
-    if index < len(questions) - 1:
+    if index < section_end:
+
         nav.append(
             InlineKeyboardButton(
                 "Next ➡️",
@@ -691,13 +848,27 @@ async def show_question(
         )
 
     if nav:
+
         buttons.append(nav)
 
+    review_text = "🔖 Mark for Review"
+
+    if index in context.user_data.get(
+        "reviews",
+        set()
+    ):
+
+        review_text = (
+            "🔖 Reviewed ✓"
+        )
+
     buttons.append([
+
         InlineKeyboardButton(
-            "🔖 Mark for Review",
+            review_text,
             callback_data="review"
         ),
+
         InlineKeyboardButton(
             "🧹 Clear",
             callback_data="clear"
@@ -705,22 +876,34 @@ async def show_question(
     ])
 
     buttons.append([
+
         InlineKeyboardButton(
             "📋 Question List",
             callback_data="qgrid"
         ),
+
         InlineKeyboardButton(
             "🏁 Submit",
             callback_data="submit"
         )
     ])
 
-    markup = InlineKeyboardMarkup(buttons)
+    markup = InlineKeyboardMarkup(
+        buttons
+    )
 
-    if edit:
+    try:
+
         await query.edit_message_text(
             text,
             reply_markup=markup
+        )
+
+    except Exception as e:
+
+        print(
+            "show_question error:",
+            e
         )
 
 
@@ -734,23 +917,47 @@ async def answer_question(
     option
 ):
 
-    answers = context.user_data.setdefault(
-        "answers",
-        {}
+    if context.user_data.get(
+        "mock_finished",
+        False
+    ):
+
+        return
+
+    if remaining_time(context) <= 0:
+
+        await query.answer(
+            "⏰ Section का समय समाप्त हो गया है।"
+        )
+
+        return
+
+    questions = context.user_data.get(
+        "mock_questions"
     )
+
+    if not questions:
+        return
 
     index = context.user_data.get(
         "mock_index",
         0
     )
 
-    questions = context.user_data.get(
-        "mock_questions"
-    )
-
     q = questions[index]
 
-    answers[str(q["id"])] = option
+    answers = context.user_data.setdefault(
+        "answers",
+        {}
+    )
+
+    answers[
+        str(q["id"])
+    ] = option
+
+    await query.answer(
+        "Answer saved ✓"
+    )
 
     await show_question(
         query,
@@ -759,7 +966,7 @@ async def answer_question(
 
 
 # =========================================================
-# QUESTION NAVIGATION
+# MOVE QUESTION
 # =========================================================
 
 async def move_question(
@@ -768,24 +975,42 @@ async def move_question(
     direction
 ):
 
-    questions = context.user_data.get(
-        "mock_questions"
+    if remaining_time(context) <= 0:
+
+        await query.answer(
+            "⏰ Section का समय समाप्त हो गया है।"
+        )
+
+        return
+
+    current_section = get_current_section(
+        context
+    )
+
+    section_start, section_end = (
+        get_section_range(
+            current_section
+        )
     )
 
     index = context.user_data.get(
         "mock_index",
-        0
+        section_start
     )
 
     new_index = index + direction
 
-    if new_index < 0:
-        new_index = 0
+    if new_index < section_start:
 
-    if new_index >= len(questions):
-        new_index = len(questions) - 1
+        new_index = section_start
 
-    context.user_data["mock_index"] = new_index
+    if new_index > section_end:
+
+        new_index = section_end
+
+    context.user_data[
+        "mock_index"
+    ] = new_index
 
     await show_question(
         query,
@@ -802,823 +1027,31 @@ async def clear_answer(
     context
 ):
 
-    questions = context.user_data[
+    questions = context.user_data.get(
         "mock_questions"
-    ]
-
-    index = context.user_data[
-        "mock_index"
-    ]
-
-    q = questions[index]
-
-    answers = context.user_data.setdefault(
-        "answers",
-        {}
     )
 
-    answers.pop(
-        str(q["id"]),
-        None
+    index = context.user_data.get(
+        "mock_index",
+        0
+    )
+
+    if questions:
+
+        q = questions[index]
+
+        context.user_data.setdefault(
+            "answers",
+            {}
+        ).pop(
+            str(q["id"]),
+            None
+        )
+
+    await query.answer(
+        "Answer cleared"
     )
 
     await show_question(
         query,
-        context
-    )
-
-
-# =========================================================
-# REVIEW
-# =========================================================
-
-async def mark_review(
-    query,
-    context
-):
-
-    reviews = context.user_data.setdefault(
-        "reviews",
-        set()
-    )
-
-    questions = context.user_data[
-        "mock_questions"
-    ]
-
-    index = context.user_data[
-        "mock_index"
-    ]
-
-    qid = questions[index]["id"]
-
-    if qid in reviews:
-        reviews.remove(qid)
-        message = "🔖 Review mark हटाया गया।"
-    else:
-        reviews.add(qid)
-        message = "🔖 Question Mark for Review किया गया।"
-
-    await query.answer(message)
-
-    await show_question(
-        query,
-        context
-    )
-
-
-# =========================================================
-# QUESTION GRID
-# =========================================================
-
-async def question_grid(
-    query,
-    context
-):
-
-    questions = context.user_data[
-        "mock_questions"
-    ]
-
-    answers = context.user_data.get(
-        "answers",
-        {}
-    )
-
-    reviews = context.user_data.get(
-        "reviews",
-        set()
-    )
-
-    rows = []
-
-    for start in range(
-        0,
-        len(questions),
-        10
-    ):
-
-        row = []
-
-        for i in range(
-            start,
-            min(start + 10, len(questions))
-        ):
-
-            qid = str(
-                questions[i]["id"]
-            )
-
-            if i == context.user_data.get(
-                "mock_index",
-                0
-            ):
-                symbol = "🔵"
-
-            elif i in reviews:
-                symbol = "🔖"
-
-            elif qid in answers:
-                symbol = "🟢"
-
-            else:
-                symbol = "⚪"
-
-            row.append(
-                InlineKeyboardButton(
-                    f"{symbol}{i+1}",
-                    callback_data=f"goto:{i}"
-                )
-            )
-
-        rows.append(row)
-
-    rows.append([
-        InlineKeyboardButton(
-            "⬅️ Back",
-            callback_data="back_question"
-        ),
-        InlineKeyboardButton(
-            "🏁 Submit",
-            callback_data="submit"
-        )
-    ])
-
-    await query.edit_message_text(
-        """
-📋 Question Navigator
-
-🟢 Answered
-🔖 Review
-⚪ Not Attempted
-🔵 Current
-""",
-        reply_markup=InlineKeyboardMarkup(rows)
-    )
-
-
-# =========================================================
-# SUBMIT CONFIRMATION
-# =========================================================
-
-async def submit_confirmation(
-    query,
-    context
-):
-
-    questions = context.user_data[
-        "mock_questions"
-    ]
-
-    answers = context.user_data.get(
-        "answers",
-        {}
-    )
-
-    reviews = context.user_data.get(
-        "reviews",
-        set()
-    )
-
-    attempted = len(answers)
-
-    skipped = len(
-        questions
-    ) - attempted
-
-    text = f"""
-🏁 Submit Mock Test?
-
-📊 Summary
-
-Total: 100
-Attempted: {attempted}
-Skipped: {skipped}
-🔖 Review: {len(reviews)}
-
-क्या आप test submit करना चाहते हैं?
-"""
-
-    await query.edit_message_text(
-        text,
-        reply_markup=InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton(
-                    "✅ Submit",
-                    callback_data="final_submit"
-                ),
-                InlineKeyboardButton(
-                    "↩️ Continue",
-                    callback_data="back_question"
-                )
-            ]
-        ])
-    )
-
-
-# =========================================================
-# CALCULATE RESULT
-# =========================================================
-
-def calculate_result(
-    user_id,
-    context
-):
-
-    questions = context.user_data[
-        "mock_questions"
-    ]
-
-    answers = context.user_data.get(
-        "answers",
-        {}
-    )
-
-    correct = 0
-    wrong = 0
-
-    section_stats = {}
-
-    for section, short in SECTIONS:
-
-        section_stats[short] = {
-            "correct": 0,
-            "wrong": 0,
-            "skipped": 0,
-            "total": QUESTIONS_PER_SECTION
-        }
-
-    for q in questions:
-
-        selected = answers.get(
-            str(q["id"])
-        )
-
-        section_index = questions.index(q) // QUESTIONS_PER_SECTION
-        short = SECTIONS[
-            section_index
-        ][1]
-
-        if selected is None:
-
-            section_stats[
-                short
-            ]["skipped"] += 1
-
-            continue
-
-        if int(selected) == int(q["answer"]):
-
-            correct += 1
-
-            section_stats[
-                short
-            ]["correct"] += 1
-
-        else:
-
-            wrong += 1
-
-            section_stats[
-                short
-            ]["wrong"] += 1
-
-    skipped = len(questions) - correct - wrong
-
-    negative = wrong * NEGATIVE_MARK
-
-    score = (
-        correct * 2
-    ) - negative
-
-    attempted = correct + wrong
-
-    accuracy = (
-        (correct / attempted) * 100
-        if attempted else 0
-    )
-
-    seconds = int(
-        time.time()
-        - context.user_data.get(
-            "mock_started",
-            time.time()
-        )
-    )
-
-    if seconds > 3600:
-        seconds = 3600
-
-    return {
-        "correct": correct,
-        "wrong": wrong,
-        "skipped": skipped,
-        "negative": negative,
-        "score": score,
-        "accuracy": accuracy,
-        "seconds": seconds,
-        "section_stats": section_stats
-    }
-
-
-# =========================================================
-# MOTIVATION
-# =========================================================
-
-def motivation(score, accuracy):
-
-    if accuracy >= 85:
-        lines = [
-            "🔥 शानदार! आपकी accuracy selection-level है।",
-            "🏆 बहुत बढ़िया! अब इसी consistency को बनाए रखो।",
-            "🚀 Excellent! अब speed को और मजबूत करो।"
-        ]
-
-    elif accuracy >= 70:
-        lines = [
-            "💪 अच्छी performance! थोड़ी accuracy बढ़ाओ।",
-            "🎯 Direction सही है—weak topics पर काम करो।",
-            "📚 अच्छा attempt! अगली बार score और ऊपर जाएगा।"
-        ]
-
-    elif accuracy >= 50:
-        lines = [
-            "🌱 Improvement की अच्छी गुंजाइश है। गलत questions revise करो।",
-            "📖 आज की mistakes आपकी अगली strength बन सकती हैं।",
-            "💪 Practice जारी रखो—consistency सबसे जरूरी है।"
-        ]
-
-    else:
-        lines = [
-            "🔥 हार मत मानो। हर गलत answer एक learning point है।",
-            "🌱 आज का score आपकी final क्षमता नहीं बताता।",
-            "💪 फिर से practice करो—अगला attempt बेहतर होगा।"
-        ]
-
-    return random.choice(lines)
-
-
-# =========================================================
-# SAVE RESULT
-# =========================================================
-
-def save_result(
-    user_id,
-    context,
-    result
-):
-
-    con = db()
-
-    cur = con.execute("""
-        INSERT INTO attempts (
-            user_id,
-            exam,
-            mode,
-            score,
-            total,
-            correct,
-            wrong,
-            skipped,
-            seconds,
-            negative_marks,
-            accuracy,
-            created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        user_id,
-        EXAM,
-        "Mock",
-        result["score"],
-        100,
-        result["correct"],
-        result["wrong"],
-        result["skipped"],
-        result["seconds"],
-        result["negative"],
-        result["accuracy"],
-        datetime.now(
-            timezone.utc
-        ).isoformat()
-    ))
-
-    attempt_id = cur.lastrowid
-
-    questions = context.user_data[
-        "mock_questions"
-    ]
-
-    answers = context.user_data.get(
-        "answers",
-        {}
-    )
-
-    reviews = context.user_data.get(
-        "reviews",
-        set()
-    )
-
-    for q in questions:
-
-        selected = answers.get(
-            str(q["id"])
-        )
-
-        is_correct = (
-            selected is not None
-            and int(selected) == int(q["answer"])
-        )
-
-        con.execute("""
-            INSERT INTO answers (
-                attempt_id,
-                question_id,
-                selected,
-                correct,
-                seconds,
-                marked_review
-            )
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (
-            attempt_id,
-            q["id"],
-            selected,
-            int(is_correct),
-            0,
-            int(q["id"] in reviews)
-        ))
-
-        if (
-            selected is not None
-            and not is_correct
-        ):
-
-            con.execute("""
-                INSERT OR IGNORE INTO wrong_questions
-                (user_id, question_id, created_at)
-                VALUES (?, ?, ?)
-            """, (
-                user_id,
-                q["id"],
-                datetime.now(
-                    timezone.utc
-                ).isoformat()
-            ))
-
-    con.commit()
-    con.close()
-
-    return attempt_id
-
-
-# =========================================================
-# RESULT SCREEN
-# =========================================================
-
-async def show_result(
-    query,
-    context
-):
-
-    result = calculate_result(
-        query.from_user.id,
-        context
-    )
-
-    save_result(
-        query.from_user.id,
-        context,
-        result
-    )
-
-    seconds = result["seconds"]
-
-    minutes = seconds // 60
-    sec = seconds % 60
-
-    avg_time = (
-        seconds / 100
-    )
-
-    text = f"""
-🏆 MOCK TEST RESULT
-
-📝 {MOCK_NAME}
-
-━━━━━━━━━━━━━━━━━━
-
-🎯 Score: {result["score"]:.2f}/200
-
-📊 Accuracy: {result["accuracy"]:.2f}%
-
-✅ Correct: {result["correct"]}
-❌ Wrong: {result["wrong"]}
-⏭️ Skipped: {result["skipped"]}
-
-➖ Negative Marks:
--{result["negative"]:.2f}
-
-⏱️ Your Time:
-{minutes} min {sec} sec
-
-⏱️ Avg Time / Question:
-{avg_time:.1f} sec
-
-━━━━━━━━━━━━━━━━━━
-
-📚 SECTION ANALYSIS
-"""
-
-    for short, stat in result[
-        "section_stats"
-    ].items():
-
-        attempted = (
-            stat["correct"]
-            + stat["wrong"]
-        )
-
-        acc = (
-            stat["correct"]
-            / attempted
-            * 100
-            if attempted else 0
-        )
-
-        text += f"""
-
-{short}
-✅ {stat["correct"]}  ❌ {stat["wrong"]}  ⏭️ {stat["skipped"]}
-🎯 Accuracy: {acc:.1f}%
-"""
-
-    text += f"""
-
-━━━━━━━━━━━━━━━━━━
-
-💡 Feedback:
-{motivation(
-    result["score"],
-    result["accuracy"]
-)}
-"""
-
-    await query.edit_message_text(
-        text,
-        reply_markup=InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton(
-                    "📋 Question Analysis",
-                    callback_data="analysis"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "🔄 New Mock",
-                    callback_data="mock"
-                ),
-                InlineKeyboardButton(
-                    "🏠 Home",
-                    callback_data="home"
-                )
-            ]
-        ])
-    )
-
-
-# =========================================================
-# PERFORMANCE
-# =========================================================
-
-async def performance(
-    query
-):
-
-    con = db()
-
-    row = con.execute("""
-        SELECT
-            COUNT(*) AS tests,
-            COALESCE(SUM(correct),0) AS correct,
-            COALESCE(SUM(wrong),0) AS wrong,
-            COALESCE(SUM(skipped),0) AS skipped,
-            COALESCE(AVG(score),0) AS avg_score,
-            COALESCE(AVG(accuracy),0) AS accuracy,
-            COALESCE(AVG(seconds),0) AS avg_seconds
-        FROM attempts
-        WHERE user_id=?
-    """, (
-        query.from_user.id,
-    )).fetchone()
-
-    con.close()
-
-    if not row or row["tests"] == 0:
-
-        text = """
-📊 MY PERFORMANCE
-
-अभी कोई test attempt नहीं किया गया है।
-
-पहला Mock Test देकर अपना performance dashboard शुरू करें। 🚀
-"""
-
-    else:
-
-        avg_time_q = (
-            row["avg_seconds"] / 100
-        )
-
-        text = f"""
-📊 MY PERFORMANCE
-
-📝 Tests Attempted: {row["tests"]}
-
-✅ Correct: {row["correct"]}
-❌ Wrong: {row["wrong"]}
-⏭️ Skipped: {row["skipped"]}
-
-🎯 Average Score:
-{row["avg_score"]:.2f}
-
-📈 Average Accuracy:
-{row["accuracy"]:.2f}%
-
-⏱️ Avg Time / Question:
-{avg_time_q:.1f} sec
-"""
-
-    await query.edit_message_text(
-        text,
-        reply_markup=home_button()
-    )
-
-
-# =========================================================
-# OTHER MENUS
-# =========================================================
-
-async def simple_menu(
-    query,
-    title,
-    message
-):
-
-    await query.edit_message_text(
-        f"{title}\n\n{message}",
-        reply_markup=home_button()
-    )
-
-
-# =========================================================
-# CALLBACK HANDLER
-# =========================================================
-
-async def callback_handler(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
-    query = update.callback_query
-
-    await query.answer()
-
-    data = query.data
-
-    # HOME
-    if data == "home":
-        context.user_data.clear()
-        await show_home(query)
-        return
-
-    # QUIZ
-    if data == "quiz":
-
-        await simple_menu(
-            query,
-            "⚡ QUIZ",
-            """
-Quiz system अगला practice module है।
-
-यहाँ immediate answer,
-explanation और topic-wise practice मिलेगी।
-"""
-        )
-
-        return
-
-    # MOCK
-    if data == "mock":
-
-        await mock_intro(query)
-
-        return
-
-    # START MOCK
-    if data == "mock_start":
-
-        questions = create_mock(
-            query.from_user.id
-        )
-
-        if not questions:
-
-            await simple_menu(
-                query,
-                "⚠️ Mock Ready नहीं है",
-                "Question bank में अभी पर्याप्त questions नहीं हैं।"
-            )
-
-            return
-
-        context.user_data.clear()
-
-        context.user_data[
-            "mock_questions"
-        ] = questions
-
-        context.user_data[
-            "mock_index"
-        ] = 0
-
-        context.user_data[
-            "answers"
-        ] = {}
-
-        context.user_data[
-            "reviews"
-        ] = set()
-
-        context.user_data[
-            "mock_started"
-        ] = time.time()
-
-        await show_question(
-            query,
-            context
-        )
-
-        return
-
-    # ANSWER
-    if data.startswith("ans:"):
-
-        option = int(
-            data.split(":")[1]
-        )
-
-        await answer_question(
-            query,
-            context,
-            option
-        )
-
-        return
-
-    # NEXT
-    if data == "next":
-
-        await move_question(
-            query,
-            context,
-            1
-        )
-
-        return
-
-    # PREVIOUS
-    if data == "prev":
-
-        await move_question(
-            query,
-            context,
-            -1
-        )
-
-        return
-
-    # CLEAR
-    if data == "clear":
-
-        await clear_answer(
-            query,
-            context
-        )
-
-        return
-
-    # REVIEW
-    if data == "review":
-
-        await mark_review(
-            query,
-            context
-        )
-
-        return
-
-    # GRID
-    if data == "qgrid":
-
        

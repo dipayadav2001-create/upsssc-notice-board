@@ -1,1475 +1,848 @@
 import os
-import re
 import json
+import random
+import sqlite3
 import time
-import html
-import hashlib
-import threading
 from datetime import datetime, timezone
-from urllib.parse import urljoin
+from typing import Optional
 
-import requests
-from bs4 import BeautifulSoup
-from flask import Flask, request, jsonify
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
-# ============================================================
-# GOVERNMENT JOB & EXAM ASSISTANT
-# ============================================================
-# Official sources are scanned first. Secondary educational /
-# recruitment sites are used only for discovery and cross-checking.
-#
-# Environment variables required on Render:
-# BOT_TOKEN
-# ADMIN_ID
-# WEBHOOK_URL
-# ============================================================
+TOKEN = os.getenv("BOT_TOKEN")
+DB = os.getenv("DB_PATH", "exam_prep.db")
+ADMIN_ID = int(os.getenv("ADMIN_ID", "0") or 0)
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_ID = str(os.getenv("ADMIN_ID", "")).strip()
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", "").rstrip("/")
-PORT = int(os.getenv("PORT", "10000"))
-
-TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}" if BOT_TOKEN else ""
-
-MAX_LATEST = 50
-MAX_ALERTS_PER_RUN = 20
-SCAN_INTERVAL = 300  # 5 minutes
-
-SEEN_FILE = "seen.json"
-LATEST_FILE = "latest.json"
-USERS_FILE = "users.json"
-FOLLOWS_FILE = "follows.json"
-CONTACT_FILE = "contact_waiting.json"
-
-app = Flask(__name__)
-
-# ------------------------------------------------------------
-# OFFICIAL GOVERNMENT SOURCES
-# ------------------------------------------------------------
-SOURCES = {
-    "SSC": {
-        "name": "SSC", "url": "https://ssc.gov.in/", "home": "https://ssc.gov.in/", "priority": "official",
-        "emoji": "📝", "scan_urls": ["https://ssc.gov.in/"],
-    },
-    "RAILWAY": {
-        "name": "Railway / RRB", "url": "https://www.rrbcdg.gov.in/", "home": "https://www.rrcb.gov.in/rrbs.html", "priority": "official",
-        "emoji": "🚆", "scan_urls": ["https://www.rrbcdg.gov.in/", "https://www.rrbcdg.gov.in/employment-notices.php"],
-    },
-    "UPSSSC": {
-        "name": "UPSSSC", "url": "https://upsssc.gov.in/", "home": "https://upsssc.gov.in/", "priority": "official",
-        "emoji": "🏢", "scan_urls": ["https://upsssc.gov.in/"],
-    },
-    "BPSC": {
-        "name": "BPSC", "url": "https://bpsc.bihar.gov.in/whats-new/", "home": "https://bpsc.bihar.gov.in/", "priority": "official",
-        "emoji": "🏛️", "scan_urls": ["https://bpsc.bihar.gov.in/whats-new/", "https://bpsc.bihar.gov.in/"],
-    },
-    "UPESSC": {
-        "name": "UP Education Service Selection Commission", "url": "https://apply.upessc.org/", "home": "https://apply.upessc.org/", "priority": "official",
-        "emoji": "👨‍🏫", "scan_urls": ["https://apply.upessc.org/"],
-    },
-    "CTET": {
-        "name": "CTET", "url": "https://ctet.nic.in/", "home": "https://ctet.nic.in/documents/", "priority": "official",
-        "emoji": "📚", "scan_urls": ["https://ctet.nic.in/", "https://ctet.nic.in/document-category/public-notices/"],
-    },
-    "UPTET": {
-        "name": "UPTET / U.P. Pariksha Niyamak Pradhikari", "url": "https://updeled.gov.in/", "home": "https://updeled.gov.in/", "priority": "official",
-        "emoji": "👩‍🏫", "scan_urls": ["https://updeled.gov.in/"],
-    },
+EXAM = "SSC CGL"
+MOCK_NAME = "SSC CGL Tier-I"
+SECTION_ORDER = [
+    "General Intelligence & Reasoning",
+    "General Awareness",
+    "Quantitative Aptitude",
+    "English Comprehension",
+]
+SECTION_SHORT = {
+    "General Intelligence & Reasoning": "Reasoning",
+    "General Awareness": "General Awareness",
+    "Quantitative Aptitude": "Maths",
+    "English Comprehension": "English",
 }
+QUESTIONS_PER_SECTION = 25
+SECTION_SECONDS = 15 * 60
+TOTAL_SECONDS = 60 * 60
+NEGATIVE_PER_WRONG = 0.50
 
-# Secondary sources: discovery only. A secondary item is never
-# presented as an official notification.
-SECONDARY_SOURCES = {
-    "EDU_JAGRAN": {
-        "name": "Jagran Josh",
-        "url": "https://www.jagranjosh.com/",
-        "home": "https://www.jagranjosh.com/",
-        "priority": "secondary",
-    },
-    "EDU_ADDA": {
-        "name": "Adda247",
-        "url": "https://www.adda247.com/",
-        "home": "https://www.adda247.com/",
-        "priority": "secondary",
-    },
-    "EDU_TESTBOOK": {
-        "name": "Testbook",
-        "url": "https://testbook.com/",
-        "home": "https://testbook.com/",
-        "priority": "secondary",
-    },
-}
-
-ALL_SOURCES = {**SOURCES, **SECONDARY_SOURCES}
-
-# ------------------------------------------------------------
-# EXAMS
-# ------------------------------------------------------------
-EXAMS = {
-    "SSC": [
-        "CGL",
-        "CHSL",
-        "MTS",
-        "GD Constable",
-        "CPO",
-        "JE",
-        "Stenographer",
-        "Selection Post",
-        "JHT",
+MOTIVATIONS = {
+    "excellent": [
+        "बहुत बढ़िया! आपकी accuracy मजबूत है—अब इसी consistency को बनाए रखो। 🏆",
+        "आज की performance selection-level discipline दिखा रही है। इसी pace पर चलते रहो। 🔥",
     ],
-    "RAILWAY": [
-        "NTPC",
-        "Group D",
-        "ALP",
-        "Technician",
-        "JE",
-        "RPF",
-        "Paramedical",
-        "RRB Level 1",
+    "good": [
+        "अच्छी performance! अब थोड़ी accuracy और speed सुधारकर score को अगले स्तर पर ले जाओ। 🚀",
+        "आप सही दिशा में बढ़ रहे हो। Weak areas पर targeted practice करो। 🎯",
     ],
-    "UPSSSC": [
-        "PET",
-        "Junior Assistant",
-        "VDO",
-        "Lekhpal",
-        "Stenographer",
-        "X-Ray Technician",
-        "Forest Guard",
-        "Junior Engineer",
-        "Technical Assistant",
+    "average": [
+        "आज का attempt आपकी अगली improvement list तैयार कर गया। गलत सवालों को दोबारा जरूर पढ़ो। 📚",
+        "Score से ज्यादा महत्वपूर्ण है कि आपने क्या सीखा। अगला attempt और मजबूत होगा। 💪",
     ],
-    "BPSC": [
-        "BPSC CCE",
-        "Teacher Recruitment / TRE",
-        "Head Teacher",
-        "Headmaster",
-        "Assistant Engineer",
-        "AEDO",
-        "Assistant",
-    ],
-    "UPESSC": [
-        "TGT",
-        "PGT",
-        "Special TET",
-        "Teacher Recruitment",
-        "Principal",
-        "Assistant Professor",
-    ],
-    "CTET": [
-        "CTET Paper I",
-        "CTET Paper II",
-        "CTET",
-    ],
-    "UPTET": [
-        "UPTET Primary",
-        "UPTET Upper Primary",
-        "UPTET",
+    "low": [
+        "कम score सिर्फ आज का result है, आपकी क्षमता नहीं। गलतियों को practice में बदलो। 🌱",
+        "आज की गलतियाँ कल के सही answers बन सकती हैं—बस revision मत छोड़ो। 🔥",
     ],
 }
 
-INFO_TYPES = [
-    "Notification",
-    "Application",
-    "Admit Card",
-    "Exam Date",
-    "Answer Key",
-    "Result",
-    "Cut Off",
-    "Vacancy",
-    "All Updates",
+# These are foundation/practice questions only. They are NOT claimed as PYQs.
+SEED_QUESTIONS = [
+    ("General Awareness", "Polity", "भारतीय संविधान में मौलिक अधिकार किस भाग में वर्णित हैं?", ["भाग I", "भाग II", "भाग III", "भाग IV"], 2, "भारतीय संविधान के भाग III में मौलिक अधिकारों का वर्णन है।"),
+    ("General Awareness", "History", "भारतीय राष्ट्रीय कांग्रेस की स्थापना किस वर्ष हुई थी?", ["1885", "1905", "1919", "1947"], 0, "भारतीय राष्ट्रीय कांग्रेस की स्थापना 1885 में हुई थी।"),
+    ("General Awareness", "Geography", "क्षेत्रफल की दृष्टि से भारत का सबसे बड़ा राज्य कौन-सा है?", ["मध्य प्रदेश", "राजस्थान", "उत्तर प्रदेश", "महाराष्ट्र"], 1, "राजस्थान क्षेत्रफल की दृष्टि से भारत का सबसे बड़ा राज्य है।"),
+    ("General Awareness", "Science", "रक्त को छानकर अपशिष्ट पदार्थों को बाहर निकालने में मुख्य भूमिका किस अंग की है?", ["हृदय", "फेफड़े", "गुर्दे", "मस्तिष्क"], 2, "गुर्दे रक्त को filter करके अपशिष्ट पदार्थों को मूत्र के माध्यम से बाहर निकालने में प्रमुख भूमिका निभाते हैं।"),
+    ("General Awareness", "Economics", "भारत में मौद्रिक नीति का संचालन मुख्यतः कौन करता है?", ["SEBI", "RBI", "NITI Aayog", "Finance Commission"], 1, "भारतीय रिज़र्व बैंक मौद्रिक नीति का संचालन करता है।"),
+    ("General Intelligence & Reasoning", "Analogy", "Book : Read :: Food : ?", ["Cook", "Eat", "Buy", "Serve"], 1, "Book को Read किया जाता है; Food को Eat किया जाता है।"),
+    ("Quantitative Aptitude", "Percentage", "200 का 15% कितना है?", ["15", "20", "30", "35"], 2, "200 × 15/100 = 30।"),
+    ("English Comprehension", "Vocabulary", 'Choose the synonym of “Rapid”.', ["Slow", "Fast", "Weak", "Late"], 1, "Rapid का अर्थ Fast होता है।"),
 ]
 
-# ------------------------------------------------------------
-# QUALIFICATION PROFILE
-# ------------------------------------------------------------
-QUALIFICATIONS = {
-    "10th": ["10th", "matric", "high school"],
-    "12th": ["12th", "intermediate", "10+2", "senior secondary"],
-    "ITI": ["iti", "industrial training institute"],
-    "Diploma": ["diploma", "polytechnic"],
-    "Graduation": [
-        "graduation",
-        "graduate",
-        "bachelor",
-        "degree",
-        "any degree",
-        "ba",
-        "b.sc",
-        "bsc",
-        "b.com",
-        "bcom",
-        "bca",
-    ],
-    "B.Ed": ["b.ed", "bed", "bachelor of education"],
-    "D.El.Ed": ["d.el.ed", "deled", "dled", "btc", "elementary education"],
-    "B.Tech/BE": ["b.tech", "btech", "b.e", "be", "engineering"],
-    "Post Graduation": [
-        "post graduation",
-        "postgraduate",
-        "master degree",
-        "masters",
-        "ma ",
-        "m.sc",
-        "msc",
-        "m.com",
-        "mcom",
-    ],
-    "LLB": ["llb", "law degree"],
-    "B.Pharm": ["b.pharm", "bpharm", "pharmacy"],
-    "B.Sc": ["b.sc", "bsc", "bachelor of science"],
-    "B.Com": ["b.com", "bcom", "bachelor of commerce"],
-    "BA": ["b.a.", "b.a ", "ba degree", "bachelor of arts"],
-}
 
-TEACHING_KEYS = [
-    "teacher",
-    "tgt",
-    "pgt",
-    "tet",
-    "ctet",
-    "uptet",
-    "bed",
-    "b.ed",
-    "d.el.ed",
-    "deled",
-    "btc",
-    "primary teacher",
-    "upper primary",
-    "school teacher",
-]
-
-EXAM_ALIASES = {
-    "cgl": ["cgl", "combined graduate level"],
-    "chsl": ["chsl", "combined higher secondary"],
-    "mts": ["mts", "multi tasking"],
-    "gd": ["gd constable", "general duty"],
-    "ntpc": ["ntpc"],
-    "group d": ["group d", "level 1"],
-    "alp": ["alp", "assistant loco pilot"],
-    "technician": ["technician"],
-    "je": ["junior engineer", "je"],
-    "pet": ["pet", "preliminary eligibility test"],
-    "lekhpal": ["lekhpal"],
-    "vdo": ["vdo", "village development officer"],
-    "tgt": ["tgt", "trained graduate teacher"],
-    "pgt": ["pgt", "post graduate teacher"],
-    "ctet": ["ctet", "central teacher eligibility test"],
-    "uptet": ["uptet", "up teacher eligibility test"],
-    "tet": ["tet", "teacher eligibility test"],
-}
-
-# ------------------------------------------------------------
-# JSON HELPERS
-# ------------------------------------------------------------
-def load_json(path, default):
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return default
+def connect():
+    con = sqlite3.connect(DB)
+    con.row_factory = sqlite3.Row
+    return con
 
 
-def save_json(path, data):
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, path)
-
-
-def load_users():
-    return load_json(USERS_FILE, {})
-
-
-def save_user(user):
-    users = load_users()
-    uid = str(user.get("id"))
-    users[uid] = {
-        "id": user.get("id"),
-        "first_name": user.get("first_name", ""),
-        "username": user.get("username", ""),
-        "last_seen": datetime.now(timezone.utc).isoformat(),
-        **users.get(uid, {}),
-    }
-    save_json(USERS_FILE, users)
-
-
-# ------------------------------------------------------------
-# TELEGRAM HELPERS
-# ------------------------------------------------------------
-def tg(method, data=None):
-    if not BOT_TOKEN:
-        return {}
-    try:
-        r = requests.post(
-            f"{TELEGRAM_API}/{method}",
-            data=data or {},
-            timeout=25,
+def init_db():
+    con = connect()
+    con.execute("PRAGMA journal_mode=WAL")
+    con.execute("""CREATE TABLE IF NOT EXISTS questions(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        exam TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        topic TEXT NOT NULL,
+        question TEXT NOT NULL,
+        options TEXT NOT NULL,
+        answer INTEGER NOT NULL,
+        explanation TEXT,
+        kind TEXT NOT NULL DEFAULT 'Practice',
+        year INTEGER,
+        shift TEXT,
+        source TEXT,
+        verified INTEGER NOT NULL DEFAULT 0,
+        difficulty TEXT DEFAULT 'Mixed'
+    )""")
+    con.execute("""CREATE TABLE IF NOT EXISTS attempts(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        exam TEXT NOT NULL,
+        mode TEXT NOT NULL,
+        score REAL NOT NULL,
+        total INTEGER NOT NULL,
+        correct INTEGER NOT NULL,
+        wrong INTEGER NOT NULL,
+        skipped INTEGER NOT NULL,
+        seconds INTEGER NOT NULL,
+        negative_marks REAL NOT NULL DEFAULT 0,
+        accuracy REAL NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+    )""")
+    con.execute("""CREATE TABLE IF NOT EXISTS answers(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        attempt_id INTEGER NOT NULL,
+        question_id INTEGER NOT NULL,
+        selected INTEGER,
+        correct INTEGER NOT NULL,
+        seconds INTEGER NOT NULL DEFAULT 0,
+        marked_review INTEGER NOT NULL DEFAULT 0
+    )""")
+    con.execute("""CREATE TABLE IF NOT EXISTS users(
+        user_id INTEGER PRIMARY KEY,
+        name TEXT,
+        target_exam TEXT DEFAULT 'SSC CGL',
+        language TEXT DEFAULT 'Hindi'
+    )""")
+    con.execute("""CREATE TABLE IF NOT EXISTS saved_questions(
+        user_id INTEGER NOT NULL,
+        question_id INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY(user_id, question_id)
+    )""")
+    con.execute("""CREATE TABLE IF NOT EXISTS user_wrong_questions(
+        user_id INTEGER NOT NULL,
+        question_id INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY(user_id, question_id)
+    )""")
+    if con.execute("SELECT COUNT(*) FROM questions WHERE exam=?", (EXAM,)).fetchone()[0] == 0:
+        con.executemany(
+            """INSERT INTO questions
+            (exam,subject,topic,question,options,answer,explanation,kind,verified,difficulty)
+            VALUES (?,?,?,?,?,?,?,?,0,'Mixed')""",
+            [(EXAM, s, t, q, json.dumps(o, ensure_ascii=False), a, e, "Practice") for s,t,q,o,a,e in SEED_QUESTIONS]
         )
-        return r.json()
-    except Exception as e:
-        print("Telegram error:", e)
-        return {}
+    con.commit()
+    con.close()
 
 
-def send_message(chat_id, text, reply_markup=None, disable_preview=True):
-    data = {
-        "chat_id": chat_id,
-        "text": text,
-        "disable_web_page_preview": disable_preview,
-        "parse_mode": "HTML",
-    }
-    if reply_markup:
-        data["reply_markup"] = json.dumps(reply_markup, ensure_ascii=False)
-    return tg("sendMessage", data)
+def markup(rows):
+    return InlineKeyboardMarkup(rows)
 
 
-def answer_callback(callback_id):
-    tg("answerCallbackQuery", {"callback_query_id": callback_id})
-
-
-def keyboard(rows):
-    return {
-        "keyboard": rows,
-        "resize_keyboard": True,
-        "is_persistent": True,
-    }
-
-
-MAIN_KB = keyboard([
-    ["📚 Exams", "💼 Find Jobs"],
-    ["🎓 My Qualification", "👨‍🏫 Teaching Jobs"],
-    ["🆕 Latest Vacancies", "📢 Latest Notices"],
-    ["🔔 My Alerts", "🔎 Search"],
-    ["📊 Status", "❓ Help"],
-    ["💬 Contact Admin"],
-])
-
-# ------------------------------------------------------------
-# FORMATTING
-# ------------------------------------------------------------
-def clean_text(value):
-    value = html.unescape(value or "")
-    value = re.sub(r"\s+", " ", value)
-    return value.strip()
-
-
-def source_label(source_key):
-    return ALL_SOURCES.get(source_key, {}).get("name", source_key)
-
-
-def make_notice_id(source_key, title, url):
-    raw = f"{source_key}|{title}|{url}".encode("utf-8")
-    return hashlib.sha256(raw).hexdigest()[:20]
-
-
-def notice_text(item):
-    return f"{item.get('title', '')} {item.get('description', '')}".lower()
-
-
-def format_notice(item):
-    source_key = item.get("source", "")
-    source = ALL_SOURCES.get(source_key, {})
-    badge = "🏛️ OFFICIAL" if item.get("priority") == "official" else "🔎 CROSS-CHECK"
-    emoji = source.get("emoji", "📌")
-    title = html.escape(item.get("title", "Untitled"))
-    source_name = html.escape(source_label(source_key))
-    url = item.get("url", "")
-    desc = html.escape(clean_text(item.get("description", ""))[:420])
-    text = (
-        f"{badge}  {emoji}\n\n"
-        f"📢 <b>{title}</b>\n\n"
-        f"🏢 <b>Board:</b> {source_name}\n"
-    )
-    if desc and desc.lower() != item.get("title", "").lower():
-        text += f"📝 <b>Details:</b> {desc}\n"
-    text += f"🕒 <b>Detected:</b> {datetime.now().strftime('%d-%m-%Y %H:%M')}\n"
-    if url:
-        text += f'\n🔗 <a href="{html.escape(url, quote=True)}">Official / Source Link</a>'
-    return text
-
-
-# ------------------------------------------------------------
-# SCRAPING
-# ------------------------------------------------------------
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (compatible; GovtExamAssistant/2.0; "
-        "+https://upsssc-notice-board.onrender.com)"
-    )
-}
-
-
-def fetch_page(url):
-    try:
-        r = requests.get(url, headers=HEADERS, timeout=30)
-        if r.status_code != 200:
-            print("HTTP", r.status_code, url)
-            return ""
-        return r.text
-    except Exception as e:
-        print("Fetch error:", url, e)
-        return ""
-
-
-def is_relevant_link(title, href):
-    text = f"{title} {href}".lower()
-    keywords = [
-        "notification", "notice", "advertisement", "vacancy", "recruit",
-        "recruitment", "application", "apply", "admit", "answer", "result",
-        "exam", "cgl", "chsl", "mts", "gd", "ntpc", "railway", "rrb",
-        "pet", "lekhpal", "teacher", "tgt", "pgt", "tet", "ctet", "uptet",
-        "deled", "bed", "group d", "alp", "technician", "junior assistant",
-        "stenographer", "cce", "bpsc", "upessc"
-    ]
-    return any(k in text for k in keywords)
-
-
-def link_is_useful(title, href, context=""):
-    text = f"{title} {context} {href}".lower()
-    keywords = [
-        "notification", "notice", "advertisement", "vacancy", "recruit", "recruitment",
-        "application", "apply", "admit", "answer", "result", "exam", "corrigendum",
-        "cgl", "chsl", "mts", "gd", "ntpc", "railway", "rrb", "cen", "pet", "lekhpal",
-        "teacher", "tgt", "pgt", "tet", "ctet", "uptet", "deled", "bed", "group d",
-        "alp", "technician", "junior assistant", "stenographer", "cce", "bpsc", "upessc",
-        "important", "public notice", "what's new", "latest news", "new exam"
-    ]
-    return any(k in text for k in keywords)
-
-
-def context_text(tag):
-    parent = tag.parent
-    chunks = []
-    for node in [tag, parent, getattr(parent, "parent", None)]:
-        if node:
-            txt = clean_text(node.get_text(" ", strip=True))
-            if txt:
-                chunks.append(txt[:800])
-    return " | ".join(dict.fromkeys(chunks))
-
-
-def parse_one_page(source_key, source, page_url):
-    html_text = fetch_page(page_url)
-    if not html_text:
-        return []
-
-    soup = BeautifulSoup(html_text, "html.parser")
-    items = []
-    seen_local = set()
-
-    # 1) Tables are common on SSC/BPSC/RRB notice boards.
-    for tr in soup.find_all("tr"):
-        links = tr.find_all("a", href=True)
-        row_text = clean_text(tr.get_text(" ", strip=True))
-        for a in links:
-            title = clean_text(a.get_text(" ", strip=True)) or row_text
-            href = urljoin(page_url, a.get("href", "").strip())
-            if not title or len(title) < 4 or href.startswith(("javascript:", "#")):
-                continue
-            if href in seen_local or not link_is_useful(title, href, row_text):
-                continue
-            seen_local.add(href)
-            items.append({
-                "id": make_notice_id(source_key, title, href),
-                "source": source_key, "priority": source.get("priority", "official"),
-                "title": title[:300], "description": row_text[:700], "url": href,
-                "found_at": datetime.now(timezone.utc).isoformat(),
-            })
-
-    # 2) Normal links, using surrounding card/list text as context.
-    for a in soup.find_all("a", href=True):
-        title = clean_text(a.get_text(" ", strip=True))
-        href = urljoin(page_url, a.get("href", "").strip())
-        if not title or len(title) < 4 or href.startswith(("javascript:", "#")):
-            continue
-        if href in seen_local:
-            continue
-        context = context_text(a)
-        if not link_is_useful(title, href, context):
-            continue
-        if title.lower() in {"home", "login", "contact us", "about us", "sitemap", "privacy policy", "terms", "menu", "search", "view all"}:
-            continue
-        seen_local.add(href)
-        items.append({
-            "id": make_notice_id(source_key, title, href),
-            "source": source_key, "priority": source.get("priority", "official"),
-            "title": title[:300], "description": context[:700], "url": href,
-            "found_at": datetime.now(timezone.utc).isoformat(),
-        })
-        if len(items) >= 60:
-            break
-
-    # 3) Some portals expose important updates as cards/text without a link.
-    if source_key in {"UPESSC", "UPTET"}:
-        for tag in soup.find_all(["h1", "h2", "h3", "h4", "li"]):
-            txt = clean_text(tag.get_text(" ", strip=True))
-            if len(txt) < 8 or not link_is_useful(txt, page_url, txt):
-                continue
-            key = make_notice_id(source_key, txt, page_url)
-            if any(x["id"] == key for x in items):
-                continue
-            items.append({
-                "id": key, "source": source_key, "priority": "official",
-                "title": txt[:300], "description": txt[:700], "url": page_url,
-                "found_at": datetime.now(timezone.utc).isoformat(),
-            })
-            if len(items) >= 40:
-                break
-
-    return items
-
-
-def parse_source(source_key, source):
-    combined = []
-    seen = set()
-    for page_url in source.get("scan_urls", [source["url"]]):
-        try:
-            found = parse_one_page(source_key, source, page_url)
-            for item in found:
-                if item["id"] not in seen:
-                    seen.add(item["id"])
-                    combined.append(item)
-        except Exception as e:
-            print("Page parse error:", source_key, page_url, e)
-    return combined[:80]
-
-
-def scan_all_sources():
-    """Scan each official board independently so UPSC cannot dominate results."""
-    official_items = []
-    secondary_items = []
-
-    for key, source in SOURCES.items():
-        try:
-            found = parse_source(key, source)
-            # Per-board cap keeps Latest Notices balanced across boards.
-            official_items.extend(found[:25])
-            print(f"{key}: {len(found)} (kept {min(len(found),25)})")
-        except Exception as e:
-            print("Source error:", key, e)
-
-    for key, source in SECONDARY_SOURCES.items():
-        try:
-            found = parse_source(key, source)
-            secondary_items.extend(found[:10])
-            print(f"Secondary {key}: {len(found)}")
-        except Exception as e:
-            print("Secondary source error:", key, e)
-
-    return official_items + secondary_items
-
-
-# ------------------------------------------------------------
-# MATCHING ENGINE
-# ------------------------------------------------------------
-def qualification_matches(profile, item):
-    if not profile:
-        return False
-
-    text = notice_text(item)
-
-    selected = profile.get("qualifications", [])
-    if not selected:
-        return True
-
-    # Direct qualification keyword match.
-    for q in selected:
-        aliases = QUALIFICATIONS.get(q, [q.lower()])
-        if any(alias.lower() in text for alias in aliases):
-            return True
-
-    # Generic "graduate/degree/any qualification" vacancies are useful
-    # for graduation and PG profiles even when the title omits it.
-    if "Graduation" in selected:
-        if any(x in text for x in [
-            "graduate", "graduation", "degree", "bachelor",
-            "any degree", "cgl", "upsssc", "bpsc"
-        ]):
-            return True
-
-    return False
-
-
-def teaching_matches(profile, item):
-    text = notice_text(item)
-    if any(k in text for k in TEACHING_KEYS):
-        if not profile:
-            return True
-
-        qs = profile.get("qualifications", [])
-        if any(q in qs for q in ["B.Ed", "D.El.Ed", "Graduation", "Post Graduation"]):
-            return True
-
-    return False
-
-
-def exam_matches(exam, item):
-    text = notice_text(item)
-    aliases = EXAM_ALIASES.get(exam.lower(), [exam.lower()])
-    return any(x in text for x in aliases)
-
-
-def search_items(query, limit=10):
-    items = load_json(LATEST_FILE, [])
-    q = query.lower().strip()
-    if not q:
-        return []
-
-    result = []
-    for item in items:
-        hay = notice_text(item)
-        if q in hay or q in item.get("source", "").lower():
-            result.append(item)
-        if len(result) >= limit:
-            break
-    return result
-
-
-# ------------------------------------------------------------
-# FOLLOW SYSTEM
-# ------------------------------------------------------------
-def get_follows():
-    return load_json(FOLLOWS_FILE, {})
-
-
-def save_follow(user_id, exam):
-    follows = get_follows()
-    uid = str(user_id)
-    follows.setdefault(uid, [])
-    if exam not in follows[uid]:
-        follows[uid].append(exam)
-    save_json(FOLLOWS_FILE, follows)
-
-
-def remove_follow(user_id, exam):
-    follows = get_follows()
-    uid = str(user_id)
-    follows[uid] = [x for x in follows.get(uid, []) if x != exam]
-    save_json(FOLLOWS_FILE, follows)
-
-
-# ------------------------------------------------------------
-# CONTACT SYSTEM
-# ------------------------------------------------------------
-def get_contacts():
-    return load_json(CONTACT_FILE, {})
-
-
-def set_contact_waiting(user_id, value=True):
-    contacts = get_contacts()
-    uid = str(user_id)
-    if value:
-        contacts[uid] = True
-    else:
-        contacts.pop(uid, None)
-    save_json(CONTACT_FILE, contacts)
-
-
-# ------------------------------------------------------------
-# QUALIFICATION PROFILE UI
-# ------------------------------------------------------------
-def qualification_keyboard():
-    return keyboard([
-        ["10th", "12th"],
-        ["ITI", "Diploma"],
-        ["Graduation", "Post Graduation"],
-        ["B.Ed", "D.El.Ed"],
-        ["B.Tech/BE", "B.Sc"],
-        ["B.Com", "BA"],
-        ["LLB", "B.Pharm"],
-        ["✅ Done", "❌ Clear"],
+def home_markup():
+    return markup([
+        [InlineKeyboardButton("⚡ Quiz", callback_data="menu:quiz"), InlineKeyboardButton("📝 Mock Test", callback_data="menu:mock")],
+        [InlineKeyboardButton("📚 Practice", callback_data="menu:practice"), InlineKeyboardButton("📜 PYQ", callback_data="menu:pyq")],
+        [InlineKeyboardButton("📰 Current Affairs", callback_data="menu:ca")],
+        [InlineKeyboardButton("📊 My Performance", callback_data="performance"), InlineKeyboardButton("❌ Wrong Questions", callback_data="wrong")],
+        [InlineKeyboardButton("🔖 Saved Questions", callback_data="saved"), InlineKeyboardButton("🏆 Leaderboard", callback_data="leaderboard")],
+        [InlineKeyboardButton("👤 Profile", callback_data="profile"), InlineKeyboardButton("❓ Help", callback_data="help")],
     ])
 
 
-def update_qualification(user_id, q):
-    users = load_users()
-    uid = str(user_id)
-    profile = users.get(uid, {}).get("profile", {})
-    qs = profile.get("qualifications", [])
-
-    if q not in qs:
-        qs.append(q)
-
-    users.setdefault(uid, {})
-    users[uid]["profile"] = {
-        **profile,
-        "qualifications": qs,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }
-    save_json(USERS_FILE, users)
+def back_home():
+    return markup([[InlineKeyboardButton("🏠 Home", callback_data="home")]])
 
 
-def clear_qualification(user_id):
-    users = load_users()
-    uid = str(user_id)
-    users.setdefault(uid, {})
-    users[uid]["profile"] = {"qualifications": []}
-    save_json(USERS_FILE, users)
+def ensure_user(user):
+    con = connect()
+    con.execute("INSERT OR IGNORE INTO users(user_id,name) VALUES (?,?)", (user.id, user.first_name or "Aspirant"))
+    con.execute("UPDATE users SET name=? WHERE user_id=?", (user.first_name or "Aspirant", user.id))
+    con.commit()
+    con.close()
 
 
-def get_profile(user_id):
-    users = load_users()
-    return users.get(str(user_id), {}).get("profile", {})
+def get_question_count_by_subject():
+    con = connect()
+    rows = con.execute("SELECT subject,COUNT(*) n FROM questions WHERE exam=? GROUP BY subject", (EXAM,)).fetchall()
+    con.close()
+    return {r["subject"]: r["n"] for r in rows}
 
 
-# ------------------------------------------------------------
-# MENUS
-# ------------------------------------------------------------
-def show_exams(chat_id):
-    rows = []
-    for key, values in EXAMS.items():
-        rows.append([f"{SOURCES.get(key, {}).get('emoji', '🏛️')} {key}"])
-    rows.append(["⬅️ Main Menu"])
-    send_message(
-        chat_id,
-        "📚 <b>Exam Boards</b>\n\nBoard चुनो:",
-        keyboard(rows),
-    )
+def mock_ready():
+    counts = get_question_count_by_subject()
+    return all(counts.get(s, 0) >= QUESTIONS_PER_SECTION for s in SECTION_ORDER)
 
 
-def show_board_exams(chat_id, board):
-    values = EXAMS.get(board, [])
-    rows = []
-    for exam in values:
-        rows.append([f"🔎 {exam}"])
-    rows.append(["⬅️ Exams"])
-    send_message(
-        chat_id,
-        f"📚 <b>{html.escape(board)}</b>\n\nExam चुनो:",
-        keyboard(rows),
-    )
+def format_score(score):
+    return str(int(score)) if float(score).is_integer() else f"{score:.1f}"
 
 
-def show_info_types(chat_id, board, exam):
-    rows = []
-    for info in INFO_TYPES:
-        rows.append([f"📌 {info}"])
-    rows.append(["⬅️ Exams"])
-    send_message(
-        chat_id,
-        f"🔎 <b>{html.escape(exam)}</b>\n\n"
-        "अब information type चुनो:",
-        keyboard(rows),
-    )
+def pick_motivation(accuracy):
+    if accuracy >= 90:
+        pool = MOTIVATIONS["excellent"]
+    elif accuracy >= 75:
+        pool = MOTIVATIONS["good"]
+    elif accuracy >= 50:
+        pool = MOTIVATIONS["average"]
+    else:
+        pool = MOTIVATIONS["low"]
+    return random.choice(pool)
 
 
-def show_results(chat_id, items, heading="📢 Results"):
-    if not items:
-        send_message(
-            chat_id,
-            f"{heading}\n\n"
-            "❌ <b>अभी matching update नहीं मिला.</b>\n\n"
-            "🔄 Official websites की अगली scan में नया update आने पर यहाँ दिखाई देगा.\n"
-            "🏛️ Official source को प्राथमिकता दी जाती है.",
-            MAIN_KB,
-        )
+def cancel_jobs(context, user_id):
+    jq = context.application.job_queue
+    if not jq:
         return
-
-    send_message(chat_id, f"{heading}\n\n📌 <b>{len(items)} updates मिले.</b>\n\n"
-        "🏛️ Official updates को ऊपर प्राथमिकता दी गई है.")
-    for item in items[:10]:
-        send_message(chat_id, format_notice(item))
+    for job in jq.get_jobs_by_name(f"mock_timeout_{user_id}"):
+        job.schedule_removal()
 
 
-# ------------------------------------------------------------
-# COMMAND HANDLERS
-# ------------------------------------------------------------
-def start(chat_id, user):
-    save_user(user)
-    send_message(
-        chat_id,
-        "👋 <b>नमस्ते!</b>\n\n"
-        "🤖 मैं <b>Government Job & Exam Assistant</b> हूँ.\n\n"
-        "🏛️ UPSC  |  📝 SSC  |  🚆 Railway/RRB\n"
-        "🏢 UPSSSC  |  🏛️ BPSC  |  👨‍🏫 UPESSC\n"
-        "📚 CTET  |  👩‍🏫 UPTET  |  TGT / PGT / TET\n\n"
-        "🎓 अपनी qualification save करके matching jobs भी खोज सकते हो.\n\n"
-        "नीचे menu से शुरू करो 👇",
-        MAIN_KB,
+def schedule_section_timeout(context, user_id):
+    cancel_jobs(context, user_id)
+    jq = context.application.job_queue
+    if jq:
+        jq.run_once(section_timeout, when=SECTION_SECONDS, data={"user_id": user_id}, name=f"mock_timeout_{user_id}")
+
+
+def selected_status(t, index):
+    a = t["answers"].get(index)
+    if a and a.get("selected") is not None:
+        return "🟢"
+    if index in t["review"]:
+        return "🟡"
+    return "⚪"
+
+
+def navigation_markup(t):
+    rows = []
+    start = t["section_start"]
+    end = t["section_end"]
+    for base in range(start, end, 5):
+        row = []
+        for i in range(base, min(base + 5, end)):
+            row.append(InlineKeyboardButton(f"{selected_status(t,i)} {i-base+1}", callback_data=f"goto:{i}"))
+        rows.append(row)
+    rows.append([
+        InlineKeyboardButton("⬅️ Prev", callback_data="prev"),
+        InlineKeyboardButton("☷ Questions", callback_data="nav"),
+        InlineKeyboardButton("Next ➡️", callback_data="next"),
+    ])
+    rows.append([
+        InlineKeyboardButton("🔖 Mark Review", callback_data="review"),
+        InlineKeyboardButton("🧹 Clear", callback_data="clear"),
+    ])
+    rows.append([InlineKeyboardButton("🏁 Submit Test", callback_data="submit_confirm")])
+    return markup(rows)
+
+
+def quiz_markup(item, saved=False):
+    opts = json.loads(item["options"])
+    rows = [[InlineKeyboardButton(f"{chr(65+i)}", callback_data=f"qans:{i}") for i in range(len(opts))]]
+    rows.append([
+        InlineKeyboardButton("🔖 Saved" if saved else "🔖 Save", callback_data="save_toggle"),
+        InlineKeyboardButton("⏭️ Skip", callback_data="qskip"),
+    ])
+    rows.append([InlineKeyboardButton("🏠 Home", callback_data="home")])
+    return markup(rows)
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    init_db()
+    ensure_user(update.effective_user)
+    context.user_data.pop("test", None)
+    await update.message.reply_text(
+        "🧠 EXAMPREP\n\nनमस्ते 👋\n\n🎯 अभी focus: SSC CGL\n\n⚡ Quiz और 📝 Mock Test अलग-अलग हैं।\n\nनीचे से अपना विकल्प चुनें:",
+        reply_markup=home_markup()
     )
 
 
-def help_text(chat_id):
-    send_message(
-        chat_id,
-        "❓ <b>Help</b>\n\n"
-        "📚 <b>Exams</b> — board और exam के हिसाब से notices\n"
-        "💼 <b>Find Jobs</b> — आपकी saved qualification से matching updates\n"
-        "🎓 <b>My Qualification</b> — qualification profile बनाओ\n"
-        "👨‍🏫 <b>Teaching Jobs</b> — TGT/PGT/TET/CTET/UPTET आदि\n"
-        "🆕 <b>Latest Vacancies</b> — latest recruitment-related notices\n"
-        "📢 <b>Latest Notices</b> — सभी latest notices\n"
-        "🔔 <b>My Alerts</b> — followed exams\n"
-        "🔎 <b>Search</b> — keyword से notice search\n"
-        "💬 <b>Contact Admin</b> — admin को message भेजो\n\n"
-        "⚠️ Official government source को primary माना जाता है. "
-        "Educational/recruitment websites केवल discovery/cross-check के लिए हैं.\n\n"
-        "ℹ️ Qualification matching अभी notice/title keywords पर आधारित है; "
-        "official PDF की detailed eligibility को बाद के version में और मजबूत किया जा सकता है.",
-        MAIN_KB,
-    )
+async def home_callback(q):
+    await q.edit_message_text("🧠 EXAMPREP\n\nअपना विकल्प चुनें:", reply_markup=home_markup())
 
 
-def show_profile(chat_id, user_id):
-    profile = get_profile(user_id)
-    qs = profile.get("qualifications", [])
-
-    if qs:
-        text = "🎓 <b>My Qualification</b>\n\n"
-        text += "आपकी qualifications:\n"
-        text += "\n".join(f"• {html.escape(q)}" for q in qs)
-        text += "\n\nनई qualification जोड़ने के लिए नीचे चुनो."
+async def show_mock_menu(q):
+    counts = get_question_count_by_subject()
+    status = "\n".join(f"• {SECTION_SHORT[s]}: {counts.get(s,0)}/25" for s in SECTION_ORDER)
+    ready = mock_ready()
+    if ready:
+        text = (
+            f"📝 {MOCK_NAME}\n\n"
+            "Official-pattern configuration:\n"
+            "• 100 Questions\n• 60 Minutes total\n• 25 Questions per section\n• 15 Minutes per section\n• 0.50 negative marking per wrong answer\n\n"
+            "हर section का timer अलग चलेगा। समय समाप्त होने पर section automatically submit होकर अगला section खुलेगा।\n\n"
+            "🚀 Ready to start?"
+        )
+        rows = [[InlineKeyboardButton("🚀 Start Full Mock", callback_data="mock:instructions")]]
     else:
         text = (
-            "🎓 <b>My Qualification</b>\n\n"
-            "अपनी qualification चुनो. Multiple qualifications चुन सकते हो."
+            f"📝 {MOCK_NAME}\n\n"
+            "Mock engine तैयार है, लेकिन पूरा 100-question bank अभी load नहीं हुआ है।\n\n"
+            f"Current question-bank coverage:\n{status}\n\n"
+            "⚠️ मैं 8 questions को 100-question mock बनाकर fake test नहीं चलाऊँगा। पहले real question bank import करना होगा।"
         )
+        rows = [[InlineKeyboardButton("📥 Import Guide", callback_data="admin:guide")]] if ADMIN_ID else []
+    rows.append([InlineKeyboardButton("🏠 Home", callback_data="home")])
+    await q.edit_message_text(text, reply_markup=markup(rows))
 
-    send_message(chat_id, text, qualification_keyboard())
 
-
-def find_jobs(chat_id, user_id):
-    profile = get_profile(user_id)
-    if not profile.get("qualifications"):
-        send_message(
-            chat_id,
-            "🎓 पहले <b>My Qualification</b> में अपनी qualification save करो.",
-            MAIN_KB,
-        )
-        return
-
-    items = load_json(LATEST_FILE, [])
-    matched = [x for x in items if qualification_matches(profile, x)]
-
-    # Official first.
-    matched.sort(key=lambda x: 0 if x.get("priority") == "official" else 1)
-
-    show_results(
-        chat_id,
-        matched,
-        "💼 <b>Your Matching Jobs / Notices</b>",
+async def show_quiz_menu(q):
+    await q.edit_message_text(
+        "⚡ QUICK QUIZ\n\n📘 SSC CGL\n\nPractice mode — answer के बाद तुरंत सही उत्तर और explanation मिलेगा।\n\nकितने प्रश्न?",
+        reply_markup=markup([
+            [InlineKeyboardButton("🔟 10", callback_data="quizsetup:10"), InlineKeyboardButton("2️⃣0️⃣ 20", callback_data="quizsetup:20")],
+            [InlineKeyboardButton("3️⃣0️⃣ 30", callback_data="quizsetup:30"), InlineKeyboardButton("🎲 Mixed 10", callback_data="quizsetup:10")],
+            [InlineKeyboardButton("🏠 Home", callback_data="home")],
+        ])
     )
 
 
-def teaching_jobs(chat_id, user_id):
-    profile = get_profile(user_id)
-    items = load_json(LATEST_FILE, [])
-    matched = [x for x in items if teaching_matches(profile, x)]
-    matched.sort(key=lambda x: 0 if x.get("priority") == "official" else 1)
+async def show_practice_menu(q):
+    counts = get_question_count_by_subject()
+    rows = []
+    for s in SECTION_ORDER:
+        rows.append([InlineKeyboardButton(f"{SECTION_SHORT[s]} ({counts.get(s,0)})", callback_data=f"practice:{s}")])
+    rows.append([InlineKeyboardButton("🏠 Home", callback_data="home")])
+    await q.edit_message_text("📚 PRACTICE\n\nSSC CGL — Subject चुनें:", reply_markup=markup(rows))
 
-    show_results(
-        chat_id,
-        matched,
-        "👨‍🏫 <b>Teaching Jobs & Exams</b>",
+
+async def show_help(q):
+    await q.edit_message_text(
+        "❓ HELP\n\n"
+        "⚡ Quiz = practice + instant explanation\n"
+        "📝 Mock = timed SSC CGL Tier-I simulation\n"
+        "📜 PYQ = verified previous-year questions\n"
+        "📊 Performance = score + accuracy + timing\n\n"
+        "🟢 Answered  🟡 Marked for Review  ⚪ Unattempted\n\n"
+        "PYQ में year/shift/source verification के बिना किसी question को PYQ नहीं कहा जाएगा।",
+        reply_markup=back_home()
     )
 
 
-def latest_vacancies(chat_id):
-    items = load_json(LATEST_FILE, [])
-    keys = [
-        "vacancy", "recruitment", "notification", "advertisement",
-        "apply", "application", "teacher", "tgt", "pgt", "cgl",
-        "chsl", "ntpc", "pet", "group d", "result"
-    ]
-    matched = [x for x in items if any(k in notice_text(x) for k in keys)]
-    matched.sort(key=lambda x: 0 if x.get("priority") == "official" else 1)
-
-    show_results(chat_id, matched[:15], "🆕 <b>Latest Vacancies</b>")
-
-
-def latest_notices(chat_id):
-    items = load_json(LATEST_FILE, [])
-    show_results(chat_id, items[:15], "📢 <b>Latest Notices</b>")
-
-
-def my_alerts(chat_id, user_id):
-    follows = get_follows()
-    exams = follows.get(str(user_id), [])
-
-    if not exams:
-        send_message(
-            chat_id,
-            "🔔 अभी कोई exam follow नहीं किया है.\n\n"
-            "📚 Exams → exam चुनो → Follow option इस्तेमाल करो.",
-            MAIN_KB,
-        )
-        return
-
-    text = "🔔 <b>My Alerts</b>\n\n"
-    text += "\n".join(f"• {html.escape(x)}" for x in exams)
-    send_message(chat_id, text, MAIN_KB)
-
-
-def show_status(chat_id):
-    seen = load_json(SEEN_FILE, [])
-    latest = load_json(LATEST_FILE, [])
-    users = load_users()
-    follows = get_follows()
-
-    follow_count = sum(len(v) for v in follows.values())
-    source_counts = {}
-    for item in latest:
-        key = item.get("source", "?")
-        source_counts[key] = source_counts.get(key, 0) + 1
-    board_lines = "\n".join(
-        f"{ALL_SOURCES.get(k, {}).get('emoji','📌')} {source_label(k)}: {v}"
-        for k, v in sorted(source_counts.items(), key=lambda x: (-x[1], x[0]))
-    ) or "—"
-
-    send_message(
-        chat_id,
-        "📊 <b>Bot Status</b>\n\n"
-        "🟢 Bot Online\n"
-        "🌐 Webhook Mode\n"
-        f"🏛️ Official Sources: {len(SOURCES)}\n"
-        f"🔎 Secondary Sources: {len(SECONDARY_SOURCES)}\n"
-        f"📚 Tracked Notices: {len(seen)}\n"
-        f"📰 Latest Saved: {len(latest)}\n"
-        f"👤 Users: {len(users)}\n"
-        f"🔔 Active Follows: {follow_count}\n"
-        f"⏱️ Scan Interval: {SCAN_INTERVAL // 60} min\n\n"
-        "<b>📊 Latest by Board</b>\n" + board_lines,
-        MAIN_KB,
+async def show_profile(q):
+    con = connect()
+    u = con.execute("SELECT * FROM users WHERE user_id=?", (q.from_user.id,)).fetchone()
+    con.close()
+    await q.edit_message_text(
+        f"👤 PROFILE\n\n🎯 Target Exam: {u['target_exam'] if u else EXAM}\n🇮🇳 Language: {u['language'] if u else 'Hindi'}",
+        reply_markup=back_home()
     )
 
 
-# ------------------------------------------------------------
-# SEARCH / FOLLOW FLOW
-# ------------------------------------------------------------
-SEARCH_WAITING = set()
-PENDING_EXAM = {}
-PENDING_BOARD = {}
-
-
-def handle_exam_button(chat_id, user_id, text):
-    # Board selection
-    # Accept the actual emoji used by each board, not only 🏛️.
-    # This fixes SSC/Railway/UPSSSC/BPSC/UPESSC/CTET/UPTET buttons.
-    for board in EXAMS:
-        expected = f"{SOURCES.get(board, {}).get('emoji', '🏛️')} {board}"
-        if text == expected or text.strip() == board:
-            PENDING_BOARD[user_id] = board
-            show_board_exams(chat_id, board)
-            return True
-
-    # Exam selection
-    if text.startswith("🔎 "):
-        exam = text.replace("🔎 ", "", 1).strip()
-        board = PENDING_BOARD.get(user_id)
-        if board and exam in EXAMS.get(board, []):
-            PENDING_EXAM[user_id] = exam
-            rows = [
-                ["📌 Notification", "📌 Application"],
-                ["📌 Admit Card", "📌 Exam Date"],
-                ["📌 Answer Key", "📌 Result"],
-                ["📌 Cut Off", "📌 Vacancy"],
-                ["📌 All Updates"],
-                ["🔔 Follow Exam"],
-                ["⬅️ Exams"],
-            ]
-            send_message(
-                chat_id,
-                f"🔎 <b>{html.escape(exam)}</b>\n\n"
-                "क्या देखना है?",
-                keyboard(rows),
-            )
-            return True
-
-    return False
-
-
-def handle_info_button(chat_id, user_id, text):
-    exam = PENDING_EXAM.get(user_id)
-    if not exam:
-        return False
-
-    if text == "🔔 Follow Exam":
-        save_follow(user_id, exam)
-        send_message(
-            chat_id,
-            f"🔔 <b>Exam Followed</b>\n\n"
-            f"{html.escape(exam)}\n\n"
-            "New matching updates पर alert मिलेगा.",
-            MAIN_KB,
-        )
-        return True
-
-    if text.startswith("📌 "):
-        info = text.replace("📌 ", "", 1).strip()
-        items = load_json(LATEST_FILE, [])
-
-        matched = []
-        for item in items:
-            if not exam_matches(exam, item):
-                continue
-            if info != "All Updates":
-                if info.lower() not in notice_text(item):
-                    continue
-            matched.append(item)
-
-        show_results(
-            chat_id,
-            matched,
-            f"🔎 <b>{html.escape(exam)}</b> — {html.escape(info)}",
-        )
-        return True
-
-    return False
-
-
-# ------------------------------------------------------------
-# ADMIN
-# ------------------------------------------------------------
-def is_admin(user_id):
-    return ADMIN_ID and str(user_id) == ADMIN_ID
-
-
-def admin_broadcast(chat_id, text):
-    users = load_users()
-    count = 0
-
-    for uid in users:
-        send_message(uid, text)
-        count += 1
-        time.sleep(0.05)
-
-    send_message(chat_id, f"📢 Broadcast sent to {count} users.", MAIN_KB)
-
-
-def admin_poll(chat_id, text):
-    # Telegram native poll.
-    question = text.strip()
-    if not question:
-        question = "आप किस exam update को सबसे पहले चाहते हैं?"
-
-    tg(
-        "sendPoll",
-        {
-            "chat_id": chat_id,
-            "question": question[:300],
-            "options": json.dumps(
-                ["Notification", "Vacancy", "Admit Card", "Result"],
-                ensure_ascii=False,
-            ),
-            "is_anonymous": "false",
-        },
+async def performance(q):
+    con = connect()
+    row = con.execute("""SELECT COUNT(*) n, COALESCE(SUM(correct),0) correct,
+        COALESCE(SUM(wrong),0) wrong, COALESCE(SUM(skipped),0) skipped,
+        COALESCE(SUM(total),0) total, COALESCE(SUM(seconds),0) seconds,
+        COALESCE(SUM(negative_marks),0) neg FROM attempts
+        WHERE user_id=? AND exam=?""", (q.from_user.id, EXAM)).fetchone()
+    con.close()
+    avg_q = round(row["seconds"] / row["total"], 1) if row["total"] else 0
+    acc = round(row["correct"] / row["correct"] + row["wrong"] * 0 if False else (row["correct"] / (row["correct"] + row["wrong"]) * 100 if row["correct"] + row["wrong"] else 0), 1)
+    await q.edit_message_text(
+        "📊 MY PERFORMANCE\n\n"
+        f"📝 Tests Attempted: {row['n']}\n"
+        f"❓ Questions: {row['total']}\n"
+        f"✅ Correct: {row['correct']}\n❌ Wrong: {row['wrong']}\n⏭️ Skipped: {row['skipped']}\n"
+        f"📈 Accuracy: {acc}%\n"
+        f"⚡ Avg. Time / Question: {avg_q} sec\n"
+        f"➖ Negative Marks: {row['neg']:.1f}",
+        reply_markup=back_home()
     )
 
 
-def forward_contact_to_admin(message):
-    if not ADMIN_ID:
+async def begin_quiz(q, context, n, subject: Optional[str] = None):
+    con = connect()
+    if subject:
+        qs = con.execute("SELECT * FROM questions WHERE exam=? AND subject=? ORDER BY RANDOM() LIMIT ?", (EXAM, subject, n)).fetchall()
+    else:
+        qs = con.execute("SELECT * FROM questions WHERE exam=? ORDER BY RANDOM() LIMIT ?", (EXAM, n)).fetchall()
+    con.close()
+    if len(qs) < n:
+        await q.edit_message_text(f"इस selection में केवल {len(qs)} questions उपलब्ध हैं। {n} पूरे questions के लिए question bank बढ़ाना होगा।", reply_markup=back_home())
         return
+    context.user_data["test"] = {
+        "mode": "Quiz", "qs": [dict(x) for x in qs], "i": 0, "answers": {}, "review": set(),
+        "start": time.time(), "q_start": time.time(), "negative": False, "saved": set()
+    }
+    await send_quiz_question(q, context)
 
-    user = message.get("from", {})
-    chat = message.get("chat", {})
-    uid = user.get("id")
 
-    text = message.get("text", "")
-    header = (
-        "💬 <b>User Message</b>\n\n"
-        f"👤 {html.escape(user.get('first_name', ''))}\n"
-        f"🆔 {uid}\n"
-        f"💬 {html.escape(text)}\n\n"
-        "↩️ Reply to this forwarded message to answer the user."
+async def send_quiz_question(q, context):
+    t = context.user_data.get("test")
+    if not t or t.get("mode") != "Quiz":
+        await q.edit_message_text("कोई active quiz नहीं है।", reply_markup=home_markup())
+        return
+    if t["i"] >= len(t["qs"]):
+        await finish_test(q, context)
+        return
+    item = t["qs"][t["i"]]
+    con = connect()
+    saved = con.execute("SELECT 1 FROM saved_questions WHERE user_id=? AND question_id=?", (q.from_user.id, item["id"])).fetchone() is not None
+    con.close()
+    opts = json.loads(item["options"])
+    text = f"⚡ QUICK QUIZ\n📘 {EXAM}\n📚 {item['subject']} • {item['topic']}\n\nQuestion {t['i']+1}/{len(t['qs'])}\n\n{item['question']}\n\n" + "\n".join(f"{chr(65+i)}. {o}" for i,o in enumerate(opts))
+    await q.edit_message_text(text, reply_markup=quiz_markup(item, saved))
+
+
+async def answer_quiz(q, context, idx):
+    t = context.user_data.get("test")
+    if not t or t.get("mode") != "Quiz":
+        return
+    item = t["qs"][t["i"]]
+    elapsed = max(1, int(time.time() - t["q_start"]))
+    t["answers"][t["i"]] = {"selected": idx, "seconds": elapsed}
+    opts = json.loads(item["options"])
+    correct = idx == item["answer"]
+    icon = "✅ CORRECT" if correct else "❌ INCORRECT"
+    text = f"{icon}\n\nसही उत्तर: {chr(65+item['answer'])}. {opts[item['answer']]}\n\n📖 Explanation\n{item['explanation'] or 'Explanation उपलब्ध नहीं है।'}\n\n🏷️ Topic: {item['topic']}\n⏱️ Your time: {elapsed} sec"
+    if not correct:
+        con = connect()
+        con.execute("INSERT OR REPLACE INTO user_wrong_questions(user_id,question_id,created_at) VALUES (?,?,?)", (q.from_user.id,item["id"],datetime.now(timezone.utc).isoformat()))
+        con.commit(); con.close()
+    await q.edit_message_text(text, reply_markup=markup([[InlineKeyboardButton("➡️ Next Question", callback_data="qnext")]]))
+
+
+async def quiz_skip(q, context):
+    t = context.user_data.get("test")
+    if not t or t.get("mode") != "Quiz":
+        return
+    elapsed = max(1, int(time.time() - t["q_start"]))
+    t["answers"][t["i"]] = {"selected": None, "seconds": elapsed}
+    t["i"] += 1
+    t["q_start"] = time.time()
+    await send_quiz_question(q, context)
+
+
+async def save_toggle(q, context):
+    t = context.user_data.get("test")
+    if not t:
+        return
+    item = t["qs"][t["i"]]
+    con = connect()
+    exists = con.execute("SELECT 1 FROM saved_questions WHERE user_id=? AND question_id=?", (q.from_user.id,item["id"])).fetchone()
+    if exists:
+        con.execute("DELETE FROM saved_questions WHERE user_id=? AND question_id=?", (q.from_user.id,item["id"]))
+        label = "🔖 Save"
+    else:
+        con.execute("INSERT OR IGNORE INTO saved_questions(user_id,question_id,created_at) VALUES (?,?,?)", (q.from_user.id,item["id"],datetime.now(timezone.utc).isoformat()))
+        label = "🔖 Saved"
+    con.commit(); con.close()
+    opts = json.loads(item["options"])
+    text = f"⚡ QUICK QUIZ\n📘 {EXAM}\n📚 {item['subject']} • {item['topic']}\n\nQuestion {t['i']+1}/{len(t['qs'])}\n\n{item['question']}\n\n" + "\n".join(f"{chr(65+i)}. {o}" for i,o in enumerate(opts))
+    rows = [[InlineKeyboardButton(chr(65+i), callback_data=f"qans:{i}") for i in range(len(opts))], [InlineKeyboardButton(label, callback_data="save_toggle"), InlineKeyboardButton("⏭️ Skip", callback_data="qskip")], [InlineKeyboardButton("🏠 Home", callback_data="home")]]
+    await q.edit_message_text(text, reply_markup=markup(rows))
+
+
+async def build_mock_questions():
+    con = connect()
+    all_qs = []
+    for subject in SECTION_ORDER:
+        rows = con.execute("SELECT * FROM questions WHERE exam=? AND subject=? ORDER BY RANDOM() LIMIT ?", (EXAM, subject, QUESTIONS_PER_SECTION)).fetchall()
+        if len(rows) < QUESTIONS_PER_SECTION:
+            con.close(); return None
+        all_qs.extend(dict(x) for x in rows)
+    con.close()
+    return all_qs
+
+
+async def start_mock(q, context):
+    qs = await build_mock_questions()
+    if not qs:
+        await show_mock_menu(q); return
+    context.user_data["test"] = {
+        "mode": "Mock Test", "qs": qs, "i": 0, "answers": {}, "review": set(),
+        "start": time.time(), "q_start": time.time(), "section": 0,
+        "section_start": 0, "section_end": 25, "negative": True, "saved": set(),
+        "completed_sections": [], "section_seconds": {}, "section_started": time.time()
+    }
+    await send_mock_question(q, context, instructions=False)
+    schedule_section_timeout(context, q.from_user.id)
+
+
+async def send_mock_question(q, context, instructions=True):
+    t = context.user_data.get("test")
+    if not t or t.get("mode") != "Mock Test":
+        await q.edit_message_text("कोई active mock नहीं है।", reply_markup=home_markup()); return
+    if t["i"] < t["section_start"] or t["i"] >= t["section_end"]:
+        t["i"] = t["section_start"]
+    item = t["qs"][t["i"]]
+    remaining = max(0, SECTION_SECONDS - int(time.time() - t["section_started"])) if "section_started" in t else SECTION_SECONDS
+    opts = json.loads(item["options"])
+    answer = t["answers"].get(t["i"], {}).get("selected")
+    selected_note = f"\n\n🟢 Selected: {chr(65+answer)}" if answer is not None else ""
+    text = (
+        f"📝 {MOCK_NAME}\n"
+        f"📚 Section: {SECTION_SHORT[SECTION_ORDER[t['section']]]}\n"
+        f"⏱️ Section Time Left: {remaining//60:02d}:{remaining%60:02d}\n\n"
+        f"Question {t['i']-t['section_start']+1}/{QUESTIONS_PER_SECTION}  •  Overall {t['i']+1}/100\n\n"
+        f"{item['question']}\n\n" + "\n".join(f"{chr(65+i)}. {o}" for i,o in enumerate(opts)) + selected_note
     )
-
-    result = send_message(ADMIN_ID, header)
-
-    # Also send original text with an explicit command-friendly format.
-    send_message(
-        ADMIN_ID,
-        f"USER_ID: {uid}\n\n{text}",
-    )
+    await q.edit_message_text(text, reply_markup=navigation_markup(t))
 
 
-# ------------------------------------------------------------
-# AUTOMATIC ALERTS
-# ------------------------------------------------------------
-def send_follow_alerts(new_items):
-    follows = get_follows()
-    sent = 0
-
-    if not new_items:
-        return
-
-    for uid, exams in follows.items():
-        for item in new_items:
-            if sent >= MAX_ALERTS_PER_RUN:
-                return
-
-            if item.get("priority") != "official":
-                # Secondary sources do not trigger automatic exam alerts.
-                continue
-
-            title = item.get("title", "")
-            text = notice_text(item)
-
-            matched_exam = None
-            for exam in exams:
-                if exam_matches(exam, item):
-                    matched_exam = exam
-                    break
-
-            if matched_exam:
-                send_message(
-                    uid,
-                    "🚨 <b>NEW UPDATE FOR YOUR FOLLOWED EXAM</b>\n\n"
-                    f"🔔 <b>{html.escape(matched_exam)}</b>\n\n"
-                    + format_notice(item),
-                    MAIN_KB,
-                )
-                sent += 1
-
-
-def scanner_loop():
-    # Wait a little after app startup.
-    time.sleep(15)
-
-    while True:
-        try:
-            new_items = scan_and_store()
-            send_follow_alerts(new_items)
-        except Exception as e:
-            print("Scanner loop error:", e)
-
-        time.sleep(SCAN_INTERVAL)
-
-
-def scan_and_store():
-    all_items = scan_all_sources()
-
-    seen = load_json(SEEN_FILE, [])
-    seen_set = set(seen)
-    old_latest = load_json(LATEST_FILE, [])
-    new_items = []
-
-    # Detect genuinely new items first.
-    for item in all_items:
-        item_id = item["id"]
-        if item_id not in seen_set:
-            new_items.append(item)
-            seen.append(item_id)
-            seen_set.add(item_id)
-
-    # Keep the latest board-balanced snapshot instead of allowing one board
-    # (especially UPSC) to occupy the entire Latest list.
-    by_source = {}
-    for item in all_items:
-        by_source.setdefault(item.get("source", "UNKNOWN"), []).append(item)
-
-    balanced = []
-    source_keys = list(by_source.keys())
-    for round_no in range(25):
-        for key in source_keys:
-            arr = by_source.get(key, [])
-            if round_no < len(arr):
-                balanced.append(arr[round_no])
-                if len(balanced) >= MAX_LATEST:
-                    break
-        if len(balanced) >= MAX_LATEST:
-            break
-
-    # Keep older items only when they are not already represented, filling
-    # remaining slots without upsetting the current board balance.
-    represented = {x.get("id") for x in balanced}
-    for item in old_latest:
-        if len(balanced) >= MAX_LATEST:
-            break
-        if item.get("id") not in represented:
-            balanced.append(item)
-            represented.add(item.get("id"))
-
-    save_json(SEEN_FILE, seen[-5000:])
-    save_json(LATEST_FILE, balanced[:MAX_LATEST])
-
-    official_new = [x for x in new_items if x.get("priority") == "official"][:MAX_ALERTS_PER_RUN]
-
-    if official_new and ADMIN_ID:
-        send_message(
-            ADMIN_ID,
-            "🚨 <b>NEW OFFICIAL UPDATES</b>\n\n"
-            f"📌 {len(official_new)} नए official updates मिले.\n"
-            "🏛️ Board-wise scan complete.",
-            MAIN_KB,
-        )
-        for item in official_new:
-            send_message(ADMIN_ID, format_notice(item), MAIN_KB)
-
-    print(
-        f"Scan complete: total={len(all_items)}, new={len(new_items)}, "
-        f"official_new={len(official_new)}, balanced_latest={len(balanced)}"
-    )
-    return new_items
-
-
-# ------------------------------------------------------------
-# UPDATE PROCESSOR
-# ------------------------------------------------------------
-def process_update(update):
-    # Callback queries are intentionally not required for this version;
-    # Reply keyboards make it easier to operate on mobile.
-    if "callback_query" in update:
-        answer_callback(update["callback_query"]["id"])
-        return
-
-    message = update.get("message")
-    if not message:
-        return
-
-    user = message.get("from", {})
-    chat = message.get("chat", {})
-    chat_id = chat.get("id")
-    user_id = user.get("id")
-    text = (message.get("text") or "").strip()
-
-    if not chat_id or not user_id:
-        return
-
-    save_user(user)
-
-    # Admin commands
-    if is_admin(user_id):
-        if text.startswith("/broadcast "):
-            admin_broadcast(chat_id, text[len("/broadcast "):].strip())
-            return
-
-        if text.startswith("/poll "):
-            admin_poll(chat_id, text[len("/poll "):].strip())
-            return
-
-        if text == "/scan":
-            send_message(chat_id, "🔄 <b>Manual scan शुरू...</b>\n\n🏛️ सभी official boards check किए जा रहे हैं.", MAIN_KB)
-            try:
-                new_items = scan_and_store()
-                send_follow_alerts(new_items)
-                send_message(chat_id, f"✅ <b>Scan complete</b>\n\n🆕 New items: {len(new_items)}", MAIN_KB)
-            except Exception as e:
-                send_message(chat_id, f"❌ Scan error: <code>{html.escape(str(e))}</code>", MAIN_KB)
-            return
-
-        # Admin reply flow: reply to a message containing USER_ID.
-        if message.get("reply_to_message"):
-            replied = message["reply_to_message"].get("text", "")
-            m = re.search(r"USER_ID:\s*(\d+)", replied)
-            if m:
-                target_uid = m.group(1)
-                send_message(
-                    target_uid,
-                    "📩 <b>Admin Reply</b>\n\n" + html.escape(text),
-                    MAIN_KB,
-                )
-                send_message(chat_id, "✅ Reply sent.", MAIN_KB)
-                return
-
-    # Contact waiting
-    contacts = get_contacts()
-    if str(user_id) in contacts and text not in {
-        "💬 Contact Admin",
-        "⬅️ Main Menu",
-    }:
-        set_contact_waiting(user_id, False)
-        forward_contact_to_admin(message)
-        send_message(
-            chat_id,
-            "✅ आपका message admin को भेज दिया गया है.",
-            MAIN_KB,
-        )
-        return
-
-    # Search waiting
-    if user_id in SEARCH_WAITING:
-        SEARCH_WAITING.discard(user_id)
-        results = search_items(text, limit=10)
-        show_results(
-            chat_id,
-            results,
-            f"🔎 <b>Search: {html.escape(text)}</b>",
-        )
-        return
-
-    # Navigation
-    if text == "/start" or text == "⬅️ Main Menu":
-        start(chat_id, user)
-        return
-
-    if text == "📚 Exams":
-        show_exams(chat_id)
-        return
-
-    if text == "💼 Find Jobs":
-        find_jobs(chat_id, user_id)
-        return
-
-    if text == "🎓 My Qualification":
-        show_profile(chat_id, user_id)
-        return
-
-    if text == "👨‍🏫 Teaching Jobs":
-        teaching_jobs(chat_id, user_id)
-        return
-
-    if text == "🆕 Latest Vacancies":
-        latest_vacancies(chat_id)
-        return
-
-    if text == "📢 Latest Notices":
-        latest_notices(chat_id)
-        return
-
-    if text == "🔔 My Alerts":
-        my_alerts(chat_id, user_id)
-        return
-
-    if text == "🔎 Search":
-        SEARCH_WAITING.add(user_id)
-        send_message(
-            chat_id,
-            "🔎 <b>Search</b>\n\n"
-            "Exam / post / keyword लिखकर भेजो.\n"
-            "उदाहरण: <code>CGL</code>, <code>teacher</code>, "
-            "<code>NTPC</code>, <code>lekhpal</code>",
-            MAIN_KB,
-        )
-        return
-
-    if text == "📊 Status":
-        show_status(chat_id)
-        return
-
-    if text == "❓ Help":
-        help_text(chat_id)
-        return
-
-    if text == "💬 Contact Admin":
-        set_contact_waiting(user_id, True)
-        send_message(
-            chat_id,
-            "💬 अपना message लिखकर भेजो.\n\n"
-            "मैं उसे admin तक पहुंचा दूँगा.",
-            MAIN_KB,
-        )
-        return
-
-    # Qualification selection
-    if text in QUALIFICATIONS:
-        update_qualification(user_id, text)
-        profile = get_profile(user_id)
-        send_message(
-            chat_id,
-            f"✅ <b>{html.escape(text)}</b> added.\n\n"
-            "और qualification चुन सकते हो या Done दबाओ.",
-            qualification_keyboard(),
-        )
-        return
-
-    if text == "❌ Clear":
-        clear_qualification(user_id)
-        send_message(
-            chat_id,
-            "🗑️ Qualification profile clear कर दिया गया.",
-            qualification_keyboard(),
-        )
-        return
-
-    if text == "✅ Done":
-        profile = get_profile(user_id)
-        qs = profile.get("qualifications", [])
-        send_message(
-            chat_id,
-            "🎓 <b>Profile Saved</b>\n\n"
-            + (
-                "\n".join(f"• {html.escape(q)}" for q in qs)
-                if qs
-                else "कोई qualification select नहीं हुई."
-            )
-            + "\n\nअब 💼 Find Jobs इस्तेमाल करो.",
-            MAIN_KB,
-        )
-        return
-
-    # Back buttons
-    if text == "⬅️ Exams":
-        show_exams(chat_id)
-        return
-
-    # Exam flow
-    if handle_exam_button(chat_id, user_id, text):
-        return
-
-    if handle_info_button(chat_id, user_id, text):
-        return
-
-    # Natural language fallback
-    if len(text) >= 3:
-        results = search_items(text, limit=5)
-        if results:
-            show_results(
-                chat_id,
-                results,
-                f"🔎 <b>Search: {html.escape(text)}</b>",
-            )
-            return
-
-    send_message(
-        chat_id,
-        "🤔 यह option समझ नहीं आया.\n\n"
-        "Menu से option चुनो या ❓ Help दबाओ.",
-        MAIN_KB,
+async def show_instructions(q):
+    await q.edit_message_text(
+        f"📋 {MOCK_NAME} — Instructions\n\n"
+        "1️⃣ कुल 100 प्रश्न होंगे।\n"
+        "2️⃣ 4 sections में 25-25 प्रश्न होंगे।\n"
+        "3️⃣ हर section के लिए 15 मिनट होंगे।\n"
+        "4️⃣ Wrong answer पर 0.50 mark कटेगा।\n"
+        "5️⃣ Section timer खत्म होने पर अगला section automatically शुरू होगा।\n"
+        "6️⃣ Mark for Review बाद में उसी section में question खोलने के लिए है।\n"
+        "7️⃣ Submit के बाद detailed result और question-wise analysis मिलेगा।\n\n"
+        "⚠️ यह real exam जैसा practice simulation है। PYQ और practice questions अलग database में रखे जाते हैं।",
+        reply_markup=markup([
+            [InlineKeyboardButton("🚀 I Agree — Start Mock", callback_data="mock:start")],
+            [InlineKeyboardButton("⬅️ Back", callback_data="menu:mock")],
+        ])
     )
 
 
-# ------------------------------------------------------------
-# FLASK WEBHOOK
-# ------------------------------------------------------------
-@app.get("/")
-def home():
-    return jsonify({
-        "status": "online",
-        "service": "Government Job & Exam Assistant",
-        "official_sources": len(SOURCES),
-        "secondary_sources": len(SECONDARY_SOURCES),
-    })
+async def answer_mock(q, context, idx):
+    t = context.user_data.get("test")
+    if not t or t.get("mode") != "Mock Test": return
+    if t["i"] < t["section_start"] or t["i"] >= t["section_end"]: return
+    elapsed = max(1, int(time.time()-t["q_start"]))
+    old = t["answers"].get(t["i"], {})
+    t["answers"][t["i"]] = {"selected": idx, "seconds": old.get("seconds",0)+elapsed}
+    t["q_start"] = time.time()
+    await send_mock_question(q, context, instructions=False)
 
 
-@app.get("/health")
-def health():
-    return jsonify({"ok": True})
+async def mock_skip(q, context):
+    t = context.user_data.get("test")
+    if not t or t.get("mode") != "Mock Test": return
+    t["answers"].setdefault(t["i"], {"selected": None, "seconds": 0})
+    t["i"] += 1
+    t["q_start"] = time.time()
+    if t["i"] >= t["section_end"]:
+        await complete_section(q, context)
+    else:
+        await send_mock_question(q, context, instructions=False)
 
 
-@app.post("/webhook")
-def webhook():
-    try:
-        update = request.get_json(force=True, silent=True) or {}
-        process_update(update)
-        return jsonify({"ok": True})
-    except Exception as e:
-        print("Webhook error:", e)
-        return jsonify({"ok": False, "error": str(e)}), 500
+async def mock_next(q, context):
+    t = context.user_data.get("test")
+    if not t or t.get("mode") != "Mock Test": return
+    if t["i"] < t["section_end"]-1:
+        t["i"] += 1
+        t["q_start"] = time.time()
+        await send_mock_question(q, context, instructions=False)
+    else:
+        await complete_section(q, context)
 
 
-def set_webhook():
-    if not BOT_TOKEN or not WEBHOOK_URL:
-        print("BOT_TOKEN / WEBHOOK_URL missing; webhook not configured.")
-        return
+async def mock_prev(q, context):
+    t = context.user_data.get("test")
+    if not t or t.get("mode") != "Mock Test": return
+    if t["i"] > t["section_start"]:
+        t["i"] -= 1
+        t["q_start"] = time.time()
+        await send_mock_question(q, context, instructions=False)
 
-    url = f"{WEBHOOK_URL}/webhook"
-    result = tg("setWebhook", {"url": url})
-    print("Webhook:", result)
+
+async def goto_question(q, context, idx):
+    t = context.user_data.get("test")
+    if not t or t.get("mode") != "Mock Test": return
+    if t["section_start"] <= idx < t["section_end"]:
+        t["i"] = idx
+        t["q_start"] = time.time()
+        await send_mock_question(q, context, instructions=False)
 
 
-# ------------------------------------------------------------
-# STARTUP
-# ------------------------------------------------------------
+async def mark_review(q, context):
+    t = context.user_data.get("test")
+    if not t or t.get("mode") != "Mock Test": return
+    if t["i"] in t["review"]:
+        t["review"].remove(t["i"])
+    else:
+        t["review"].add(t["i"])
+    await send_mock_question(q, context, instructions=False)
+
+
+async def clear_answer(q, context):
+    t = context.user_data.get("test")
+    if not t or t.get("mode") != "Mock Test": return
+    t["answers"].pop(t["i"], None)
+    await send_mock_question(q, context, instructions=False)
+
+
+async def show_navigation(q, context):
+    t = context.user_data.get("test")
+    if not t or t.get("mode") != "Mock Test": return
+    await q.edit_message_text(
+        f"☷ Question Navigator\n\n🟢 Answered  🟡 Review  ⚪ Unattempted\n\nSection: {SECTION_SHORT[SECTION_ORDER[t['section']]]}",
+        reply_markup=navigation_markup(t)
+    )
+
+
+async def submit_confirm(q, context):
+    t = context.user_data.get("test")
+    if not t or t.get("mode") != "Mock Test": return
+    start,end=t["section_start"],t["section_end"]
+    attempted=sum(1 for i in range(start,end) if t["answers"].get(i,{}).get("selected") is not None)
+    review=sum(1 for i in range(start,end) if i in t["review"])
+    unanswered=QUESTIONS_PER_SECTION-attempted
+    await q.edit_message_text(
+        "🏁 Submit Current Test?\n\n"
+        f"Section: {SECTION_SHORT[SECTION_ORDER[t['section']]]}\n"
+        f"Attempted: {attempted}\n"
+        f"Unattempted: {unanswered}\n"
+        f"Marked Review: {review}\n\n"
+        "आप अभी पूरा mock submit कर सकते हैं, या वापस जाकर questions check कर सकते हैं।",
+        reply_markup=markup([
+            [InlineKeyboardButton("🏁 Submit Full Mock", callback_data="submit:full")],
+            [InlineKeyboardButton("↩️ Continue Test", callback_data="continue")],
+        ])
+    )
+
+
+async def complete_section(q, context, auto=False):
+    t=context.user_data.get("test")
+    if not t or t.get("mode") != "Mock Test": return
+    elapsed=min(SECTION_SECONDS,int(time.time()-t.get("section_started",time.time())))
+    t["section_seconds"][t["section"]]=elapsed
+    t["completed_sections"].append(t["section"])
+    if t["section"] >= 3:
+        return await finish_test(q, context, timed_out=auto)
+    t["section"] += 1
+    t["section_start"] = t["section"]*QUESTIONS_PER_SECTION
+    t["section_end"] = t["section_start"]+QUESTIONS_PER_SECTION
+    t["i"] = t["section_start"]
+    t["section_started"] = time.time()
+    t["q_start"] = time.time()
+    schedule_section_timeout(context, q.from_user.id)
+    note = "⏰ पिछला section का समय समाप्त हो गया।" if auto else "✅ Section complete!"
+    await q.edit_message_text(
+        f"{note}\n\n➡️ अब {SECTION_SHORT[SECTION_ORDER[t['section']]]} शुरू है।\n\n⏱️ 15:00",
+        reply_markup=markup([[InlineKeyboardButton("🚀 Start Section", callback_data="section:start")]])
+    )
+
+
+async def section_timeout(context: ContextTypes.DEFAULT_TYPE):
+    data=context.job.data if context.job else {}
+    user_id=data.get("user_id")
+    # Job callbacks do not have the original CallbackQuery message, so edit the saved chat/message if available.
+    # The current session is held in application user_data via user_data access from user id.
+    ud = context.application.user_data.get(user_id)
+    if not ud or ud.get("test",{}).get("mode") != "Mock Test": return
+    t=ud["test"]
+    # Count the section and move state; user sees the transition on their next interaction.
+    t["section_seconds"][t["section"]]=SECTION_SECONDS
+    t["completed_sections"].append(t["section"])
+    if t["section"] >= 3:
+        # Cannot safely create a message without chat_id stored; use bot send_message.
+        await context.bot.send_message(chat_id=user_id, text="⏰ समय समाप्त! Mock का final section भी complete हो गया है। अब result तैयार हो रहा है।")
+        return await finish_without_query(context, user_id, timed_out=True)
+    t["section"] += 1
+    t["section_start"] = t["section"]*QUESTIONS_PER_SECTION
+    t["section_end"] = t["section_start"]+QUESTIONS_PER_SECTION
+    t["i"] = t["section_start"]
+    t["section_started"] = time.time()
+    t["q_start"] = time.time()
+    schedule_section_timeout(context, user_id)
+    await context.bot.send_message(chat_id=user_id, text=f"⏰ Time up!\n\n➡️ अब {SECTION_SHORT[SECTION_ORDER[t['section']]]} शुरू है।", reply_markup=markup([[InlineKeyboardButton("🚀 Open Section", callback_data="section:start")]]))
+
+
+async def finish_without_query(context, user_id, timed_out=False):
+    # Shared finalizer using bot.send_message.
+    t=context.application.user_data.get(user_id,{}).get("test")
+    if not t: return
+    result=save_attempt(user_id,t)
+    cancel_jobs(context,user_id)
+    text=build_result_text(result,timed_out)
+    await context.bot.send_message(chat_id=user_id,text=text,reply_markup=result_markup(t))
+    context.application.user_data[user_id].pop("test",None)
+
+
+def save_attempt(user_id,t):
+    total=len(t["qs"])
+    correct=wrong=skipped=0
+    per=[]
+    for i,item in enumerate(t["qs"]):
+        a=t["answers"].get(i,{})
+        selected=a.get("selected")
+        sec=max(0,int(a.get("seconds",0)))
+        if selected is None:
+            skipped+=1
+        else:
+            if selected==item["answer"]: correct+=1
+            else: wrong+=1
+        per.append((i,item,selected,sec,selected is not None and selected==item["answer"],i in t["review"]))
+    negative=wrong*NEGATIVE_PER_WRONG if t.get("negative") else 0
+    score=correct-negative
+    answered=correct+wrong
+    accuracy=round(correct/answered*100,1) if answered else 0
+    seconds=min(int(time.time()-t["start"]),TOTAL_SECONDS) if t.get("mode")=="Mock Test" else int(time.time()-t["start"])
+    con=connect()
+    cur=con.execute("""INSERT INTO attempts(user_id,exam,mode,score,total,correct,wrong,skipped,seconds,negative_marks,accuracy,created_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",(user_id,EXAM,t["mode"],score,total,correct,wrong,skipped,seconds,negative,accuracy,datetime.now(timezone.utc).isoformat()))
+    attempt_id=cur.lastrowid
+    for i,item,selected,sec,is_correct,is_review in per:
+        con.execute("INSERT INTO answers(attempt_id,question_id,selected,correct,seconds,marked_review) VALUES (?,?,?,?,?,?)",(attempt_id,item["id"],selected,1 if is_correct else 0,sec,1 if is_review else 0))
+        if selected is not None and not is_correct:
+            con.execute("INSERT OR REPLACE INTO user_wrong_questions(user_id,question_id,created_at) VALUES (?,?,?)",(user_id,item["id"],datetime.now(timezone.utc).isoformat()))
+    con.commit()
+    con.close()
+    section_stats=[]
+    for sidx,subject in enumerate(SECTION_ORDER):
+        start=sidx*25; end=start+25
+        c=w=sk=0
+        for i in range(start,end):
+            a=t["answers"].get(i,{})
+            sel=a.get("selected")
+            if sel is None: sk+=1
+            elif sel==t["qs"][i]["answer"]: c+=1
+            else: w+=1
+        neg=w*NEGATIVE_PER_WRONG
+        section_stats.append((subject,c,w,sk,c-neg))
+    avg_time=round(sum(x[3] for x in per if x[2] is not None)/answered,1) if answered else 0
+    return {"attempt_id":attempt_id,"total":total,"correct":correct,"wrong":wrong,"skipped":skipped,"negative":negative,"score":score,"accuracy":accuracy,"seconds":seconds,"avg_time":avg_time,"sections":section_stats}
+
+
+def build_result_text(r,t,timed_out=False):
+    mins,secs=divmod(r["seconds"],60)
+    text=(
+        "🏆 TEST COMPLETED\n\n"
+        f"📘 {EXAM} • {t['mode']}\n"
+        f"{'⏰ Time limit reached.\n\n' if timed_out else ''}"
+        "━━━━━━━━━━━━━━\n"
+        f"🎯 Score: {format_score(r['score'])}/{r['total']}\n"
+        f"📈 Accuracy: {r['accuracy']}%\n"
+        f"⏱️ Your Time: {mins:02d}:{secs:02d}\n"
+        f"⚡ Avg Time / Question: {r['avg_time']} sec\n\n"
+        f"✅ Correct: {r['correct']}\n❌ Wrong: {r['wrong']}\n⏭️ Skipped: {r['skipped']}\n"
+        f"➖ Negative Marks: -{r['negative']:.1f}\n"
+        "━━━━━━━━━━━━━━\n\n"
+        "📚 SECTION ANALYSIS\n"
+    )
+    for s,c,w,sk,score in r["sections"]:
+        text += f"• {SECTION_SHORT[s]}: {c}/25 correct | {w} wrong | {sk} skipped | Score {format_score(score)}\n"
+    text += f"\n🌟 आज की बात\n\n“{pick_motivation(r['accuracy'])}”\n\n🔥 Keep Practicing!"
+    return text
+
+
+def result_markup(t):
+    return markup([
+        [InlineKeyboardButton("📊 Question-wise Analysis", callback_data="analysis")],
+        [InlineKeyboardButton("📊 Performance", callback_data="performance"), InlineKeyboardButton("🏠 Home", callback_data="home")],
+    ])
+
+
+async def finish_test(q, context, timed_out=False):
+    t=context.user_data.get("test")
+    if not t: return
+    result=save_attempt(q.from_user.id,t)
+    cancel_jobs(context,q.from_user.id)
+    await q.edit_message_text(build_result_text(result,t,timed_out),reply_markup=result_markup(t))
+    context.user_data.pop("test",None)
+    context.user_data["last_attempt_id"]=result["attempt_id"]
+
+
+async def analysis(q, context):
+    attempt_id=context.user_data.get("last_attempt_id")
+    if not attempt_id:
+        await q.edit_message_text("इस session में कोई result analysis उपलब्ध नहीं है।",reply_markup=back_home()); return
+    con=connect()
+    rows=con.execute("""SELECT a.question_id,a.selected,a.correct,a.seconds,q.question,q.answer,q.options,q.explanation,q.subject,q.topic
+        FROM answers a JOIN questions q ON q.id=a.question_id WHERE a.attempt_id=? ORDER BY a.id""",(attempt_id,)).fetchall()
+    con.close()
+    if not rows:
+        await q.edit_message_text("Analysis उपलब्ध नहीं है।",reply_markup=back_home()); return
+    # Telegram message length is limited; show compact question-wise analysis in chunks.
+    text="📊 QUESTION-WISE ANALYSIS\n\n"
+    for n,r in enumerate(rows,1):
+        status="⏭️ Skipped" if r["selected"] is None else ("✅ Correct" if r["correct"] else "❌ Wrong")
+        selected="—" if r["selected"] is None else chr(65+r["selected"])
+        text += f"{n}. {status} | Your: {selected} | Correct: {chr(65+r['answer'])} | {r['seconds']}s\n"
+    if len(text)>3900:
+        text=text[:3850]+"\n… बाकी analysis आगे build में pagination के साथ जोड़ी जाएगी।"
+    await q.edit_message_text(text,reply_markup=back_home())
+
+
+async def generic_module(q,data):
+    labels={
+        "menu:pyq":"📜 PYQ\n\nVerified PYQs year/shift/source metadata के साथ अलग database में रखे जाएंगे।\n\n⚠️ Unverified questions को PYQ नहीं कहा जाएगा।",
+        "menu:ca":"📰 CURRENT AFFAIRS\n\nDaily, Monthly और Topic-wise Current Affairs module अगला content phase है।",
+        "wrong":"❌ WRONG QUESTIONS\n\nआपके गलत किए हुए questions automatically save किए जाते हैं। Full reattempt screen अगले module में जोड़ा जाएगा।",
+        "saved":"🔖 SAVED QUESTIONS\n\nआप saved questions को बाद में revise कर सकेंगे।",
+        "leaderboard":"🏆 LEADERBOARD\n\nRank/Percentile केवल पर्याप्त real-user data आने पर दिखाया जाएगा। कोई fake rank नहीं।",
+    }
+    await q.edit_message_text(labels.get(data,"Module under development."),reply_markup=back_home())
+
+
+async def admin_guide(q):
+    if ADMIN_ID and q.from_user.id != ADMIN_ID:
+        await q.answer("Admin only",show_alert=True); return
+    await q.edit_message_text(
+        "📥 QUESTION BANK IMPORT\n\n"
+        "Admin JSON import format:\n\n"
+        '[{"exam":"SSC CGL","subject":"General Awareness","topic":"Polity","question":"...","options":["A","B","C","D"],"answer":2,"explanation":"...","kind":"PYQ","year":2025,"shift":"Shift 1","source":"Official/verified source","verified":1}]\n\n'
+        "PYQ के लिए year + shift + source + verified=1 जरूरी रखा जाएगा।",
+        reply_markup=back_home()
+    )
+
+
+async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q=update.callback_query
+    await q.answer()
+    data=q.data
+    ensure_user(q.from_user)
+
+    if data=="home": return await home_callback(q)
+    if data=="menu:quiz": return await show_quiz_menu(q)
+    if data=="menu:mock": return await show_mock_menu(q)
+    if data=="menu:practice": return await show_practice_menu(q)
+    if data=="menu:pyq" or data=="menu:ca" or data in ("wrong","saved","leaderboard"): return await generic_module(q,data)
+    if data=="help": return await show_help(q)
+    if data=="profile": return await show_profile(q)
+    if data=="performance": return await performance(q)
+    if data=="admin:guide": return await admin_guide(q)
+    if data.startswith("quizsetup:"): return await q.edit_message_text(f"⚡ QUICK QUIZ\n\n❓ {data.split(':')[1]} Questions\n🎲 Mixed Subjects\n\nStart करें?",reply_markup=markup([[InlineKeyboardButton("🚀 START",callback_data=f"quizstart:{data.split(':')[1]}")],[InlineKeyboardButton("🏠 Home",callback_data="home")]]))
+    if data.startswith("quizstart:"): return await begin_quiz(q,context,int(data.split(':')[1]))
+    if data.startswith("practice:"): return await begin_quiz(q,context,10,data.split(':',1)[1])
+    if data=="qans:" or data.startswith("qans:"): return await answer_quiz(q,context,int(data.split(':')[1]))
+    if data=="qskip": return await quiz_skip(q,context)
+    if data=="qnext":
+        t=context.user_data.get("test")
+        if t and t.get("mode")=="Quiz":
+            t["i"]+=1; t["q_start"]=time.time(); return await send_quiz_question(q,context)
+    if data=="save_toggle": return await save_toggle(q,context)
+    if data=="mock:instructions": return await show_instructions(q)
+    if data=="mock:start": return await start_mock(q,context)
+    if data=="section:start": return await send_mock_question(q,context,instructions=False)
+    if data=="qskip": return await quiz_skip(q,context)
+    if data.startswith("qans:"): return await answer_quiz(q,context,int(data.split(':')[1]))
+    if data.startswith("goto:"): return await goto_question(q,context,int(data.split(':')[1]))
+    if data=="next": return await mock_next(q,context)
+    if data=="prev": return await mock_prev(q,context)
+    if data=="review": return await mark_review(q,context)
+    if data=="clear": return await clear_answer(q,context)
+    if data=="nav": return await show_navigation(q,context)
+    if data=="submit_confirm": return await submit_confirm(q,context)
+    if data=="continue": return await send_mock_question(q,context,instructions=False)
+    if data=="submit:full": return await finish_test(q,context)
+    if data=="analysis": return await analysis(q,context)
+
+
+async def error_handler(update, context):
+    print("BOT ERROR:", repr(context.error))
+
+
 if __name__ == "__main__":
-    print("Starting Government Job & Exam Assistant...")
-    print("Official sources:", len(SOURCES))
-    print("Secondary sources:", len(SECONDARY_SOURCES))
-
-    # Configure webhook before serving.
-    set_webhook()
-
-    # Background scanner.
-    t = threading.Thread(target=scanner_loop, daemon=True)
-    t.start()
-
-    app.run(host="0.0.0.0", port=PORT)
+    if not TOKEN:
+        raise SystemExit("BOT_TOKEN is required")
+    init_db()
+    app=Application.builder().token(TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(button))
+    app.add_error_handler(error_handler)
+    app.run_polling(drop_pending_updates=True)

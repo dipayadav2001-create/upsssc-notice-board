@@ -3,6 +3,8 @@ import json
 import random
 import sqlite3
 import time
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -31,6 +33,32 @@ QUESTIONS_PER_SECTION = 25
 SECTION_SECONDS = 15 * 60
 TOTAL_SECONDS = 60 * 60
 NEGATIVE_PER_WRONG = 0.50
+
+# Render Web Service requires an HTTP port. The Telegram bot can still use polling;
+# this tiny health server only keeps the service bound to Render's assigned port.
+PORT = int(os.getenv("PORT", "10000"))
+
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path in ("/", "/health"):
+            body = b"OK"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def log_message(self, format, *args):
+        return
+
+def start_health_server():
+    server = ThreadingHTTPServer(("0.0.0.0", PORT), HealthHandler)
+    print(f"Health server listening on 0.0.0.0:{PORT}")
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server
 
 MOTIVATIONS = {
     "excellent": [
@@ -841,6 +869,7 @@ if __name__ == "__main__":
     if not TOKEN:
         raise SystemExit("BOT_TOKEN is required")
     init_db()
+    start_health_server()
     app=Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button))

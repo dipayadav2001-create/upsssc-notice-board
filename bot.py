@@ -1054,4 +1054,6 @@ async def clear_answer(
 
     await show_question(
         query,
+            context
+)
        

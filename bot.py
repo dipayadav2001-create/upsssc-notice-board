@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from datetime import datetime, timezone
 from typing import Optional
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
 TOKEN = os.getenv("BOT_TOKEN")
@@ -286,6 +286,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     init_db()
     ensure_user(update.effective_user)
     context.user_data.pop("test", None)
+    # Remove the persistent keyboard left behind by the old Notice Board bot.
+    await update.message.reply_text("🔄 नया EXAMPREP menu चालू हो गया है।", reply_markup=ReplyKeyboardRemove())
     await update.message.reply_text(
         "🧠 EXAMPREP\n\nनमस्ते 👋\n\n🎯 अभी focus: SSC CGL\n\n⚡ Quiz और 📝 Mock Test अलग-अलग हैं।\n\nनीचे से अपना विकल्प चुनें:",
         reply_markup=home_markup()

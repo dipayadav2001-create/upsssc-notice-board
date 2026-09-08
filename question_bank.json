@@ -1,836 +1,1802 @@
 [
   {
+    "id": "ssc_cgl_p_001",
     "exam": "SSC CGL",
     "subject": "Reasoning",
     "topic": "Analogy",
-    "question": "पुस्तक : पढ़ना :: भोजन : ?",
-    "options": ["पकाना", "खाना", "बेचना", "खरीदना"],
-    "answer": 1,
-    "explanation": "पुस्तक को पढ़ा जाता है, उसी प्रकार भोजन को खाया जाता है।",
+    "question": "Book : Author :: Painting : ?",
+    "options": [
+      "Painter",
+      "Singer",
+      "Reader",
+      "Poet"
+    ],
+    "answer": 0,
+    "explanation": "A painting is created by a painter.",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_002",
     "exam": "SSC CGL",
     "subject": "Reasoning",
-    "topic": "Number Series",
-    "question": "श्रृंखला में अगली संख्या क्या होगी? 2, 4, 8, 16, ?",
-    "options": ["20", "24", "32", "36"],
+    "topic": "Series",
+    "question": "श्रृंखला पूरी कीजिए: 2, 6, 12, 20, 30, ?",
+    "options": [
+      "36",
+      "40",
+      "42",
+      "44"
+    ],
     "answer": 2,
-    "explanation": "प्रत्येक संख्या को 2 से गुणा किया गया है। 16 × 2 = 32।",
+    "explanation": "अंतर 4, 6, 8, 10 है; अगला अंतर 12 होगा।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
-    "exam": "SSC CGL",
-    "subject": "Reasoning",
-    "topic": "Alphabet Series",
-    "question": "अंग्रेजी वर्णमाला में बाएँ से 10वें अक्षर के दाएँ 5वाँ अक्षर कौन-सा होगा?",
-    "options": ["N", "O", "P", "Q"],
-    "answer": 1,
-    "explanation": "बाएँ से 10वाँ अक्षर J है। J के दाएँ पाँचवाँ अक्षर O है।",
-    "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
-    "verified": 0,
-    "difficulty": "Easy"
-  },
-  {
+    "id": "ssc_cgl_p_003",
     "exam": "SSC CGL",
     "subject": "Reasoning",
     "topic": "Coding-Decoding",
-    "question": "यदि CAT को DBU लिखा जाता है, तो DOG को किस प्रकार लिखा जाएगा?",
-    "options": ["EPH", "EOG", "DPH", "EPG"],
+    "question": "यदि CAT को DBU लिखा जाए, तो DOG को क्या लिखा जाएगा?",
+    "options": [
+      "EPH",
+      "EOG",
+      "FPH",
+      "DPG"
+    ],
     "answer": 0,
-    "explanation": "प्रत्येक अक्षर में 1 जोड़ा गया है। DOG = EPH।",
+    "explanation": "हर अक्षर को अगले अक्षर से बदला गया है।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_004",
     "exam": "SSC CGL",
     "subject": "Reasoning",
-    "topic": "Classification",
-    "question": "निम्नलिखित में से विषम को चुनिए।",
-    "options": ["सेब", "आम", "केला", "आलू"],
-    "answer": 3,
-    "explanation": "सेब, आम और केला फल हैं, जबकि आलू फल नहीं है।",
-    "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
-    "verified": 0,
-    "difficulty": "Easy"
-  },
-  {
-    "exam": "SSC CGL",
-    "subject": "Reasoning",
-    "topic": "Direction Sense",
-    "question": "राम 5 मीटर उत्तर जाता है और फिर 5 मीटर पूर्व जाता है। वह प्रारंभिक बिंदु से किस दिशा में है?",
-    "options": ["उत्तर-पश्चिम", "उत्तर-पूर्व", "दक्षिण-पूर्व", "दक्षिण-पश्चिम"],
+    "topic": "Direction",
+    "question": "रवि 5 किमी उत्तर, फिर 3 किमी पूर्व जाता है। प्रारंभिक बिंदु से वह किस दिशा में है?",
+    "options": [
+      "उत्तर-पश्चिम",
+      "उत्तर-पूर्व",
+      "दक्षिण-पूर्व",
+      "दक्षिण-पश्चिम"
+    ],
     "answer": 1,
-    "explanation": "उत्तर और पूर्व की संयुक्त दिशा उत्तर-पूर्व होती है।",
+    "explanation": "उत्तर और पूर्व दोनों दिशाओं में जाने पर उत्तर-पूर्व होता है।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
-    "exam": "SSC CGL",
-    "subject": "Reasoning",
-    "topic": "Blood Relation",
-    "question": "A, B का पिता है। B, C की बहन है। C का A से क्या संबंध है?",
-    "options": ["पुत्र", "पुत्री", "भाई", "पत्नी"],
-    "answer": 0,
-    "explanation": "A, B का पिता है और B तथा C भाई-बहन हैं। अतः C, A का पुत्र है।",
-    "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
-    "verified": 0,
-    "difficulty": "Easy"
-  },
-  {
+    "id": "ssc_cgl_p_005",
     "exam": "SSC CGL",
     "subject": "Reasoning",
     "topic": "Ranking",
-    "question": "एक कक्षा में राहुल ऊपर से 12वें और नीचे से 18वें स्थान पर है। कक्षा में कुल कितने विद्यार्थी हैं?",
-    "options": ["28", "29", "30", "31"],
+    "question": "एक कक्षा में राहुल ऊपर से 12वाँ और नीचे से 18वाँ है। कुल विद्यार्थी कितने हैं?",
+    "options": [
+      "28",
+      "29",
+      "30",
+      "31"
+    ],
     "answer": 1,
-    "explanation": "कुल विद्यार्थी = 12 + 18 − 1 = 29।",
+    "explanation": "कुल = 12 + 18 - 1 = 29।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_006",
     "exam": "SSC CGL",
     "subject": "Reasoning",
-    "topic": "Number Series",
-    "question": "श्रृंखला में अगली संख्या क्या होगी? 3, 6, 12, 24, ?",
-    "options": ["36", "42", "48", "54"],
+    "topic": "Ranking",
+    "question": "अमित बाएँ से 7वाँ और दाएँ से 9वाँ है। कुल व्यक्ति कितने हैं?",
+    "options": [
+      "14",
+      "15",
+      "16",
+      "17"
+    ],
+    "answer": 1,
+    "explanation": "कुल = 7 + 9 - 1 = 15।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_007",
+    "exam": "SSC CGL",
+    "subject": "Reasoning",
+    "topic": "Odd One Out",
+    "question": "निम्न में से विषम चुनिए।",
+    "options": [
+      "सेब",
+      "आम",
+      "गाजर",
+      "केला"
+    ],
     "answer": 2,
-    "explanation": "प्रत्येक संख्या को 2 से गुणा किया गया है। 24 × 2 = 48।",
+    "explanation": "गाजर सब्जी है; बाकी फल हैं।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_008",
     "exam": "SSC CGL",
     "subject": "Reasoning",
-    "topic": "Classification",
-    "question": "निम्नलिखित में से विषम संख्या चुनिए।",
-    "options": ["16", "25", "36", "45"],
-    "answer": 3,
-    "explanation": "16, 25 और 36 पूर्ण वर्ग हैं, जबकि 45 पूर्ण वर्ग नहीं है।",
-    "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
-    "verified": 0,
-    "difficulty": "Easy"
-  },
-  {
-    "exam": "SSC CGL",
-    "subject": "Reasoning",
-    "topic": "Analogy",
-    "question": "पैर : चलना :: आँख : ?",
-    "options": ["सुनना", "देखना", "बोलना", "छूना"],
+    "topic": "Blood Relation",
+    "question": "सीमा, रीना की बहन है। रीना, मोहन की माँ है। सीमा का मोहन से क्या संबंध है?",
+    "options": [
+      "बहन",
+      "मौसी",
+      "चाची",
+      "दादी"
+    ],
     "answer": 1,
-    "explanation": "पैर का उपयोग चलने के लिए और आँख का उपयोग देखने के लिए किया जाता है।",
+    "explanation": "माँ की बहन मौसी होती है।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_009",
     "exam": "SSC CGL",
     "subject": "Reasoning",
     "topic": "Alphabet",
     "question": "अंग्रेजी वर्णमाला में M के बाद पाँचवाँ अक्षर कौन-सा है?",
-    "options": ["Q", "R", "S", "T"],
+    "options": [
+      "Q",
+      "R",
+      "S",
+      "T"
+    ],
     "answer": 1,
-    "explanation": "M के बाद N, O, P, Q और R आते हैं।",
+    "explanation": "M के बाद N,O,P,Q,R आता है।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_010",
     "exam": "SSC CGL",
     "subject": "Reasoning",
-    "topic": "Coding-Decoding",
-    "question": "यदि PEN को QFO लिखा जाता है, तो BOOK को किस प्रकार लिखा जाएगा?",
-    "options": ["CPPL", "CQQM", "APPL", "CPPK"],
-    "answer": 0,
-    "explanation": "प्रत्येक अक्षर में 1 जोड़ने पर BOOK = CPPL।",
-    "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
-    "verified": 0,
-    "difficulty": "Easy"
-  },
-  {
-    "exam": "SSC CGL",
-    "subject": "Reasoning",
-    "topic": "Direction Sense",
-    "question": "सीमा पूर्व की ओर 10 मीटर चलती है और फिर दाएँ मुड़कर 10 मीटर चलती है। अब वह किस दिशा में जा रही है?",
-    "options": ["उत्तर", "दक्षिण", "पूर्व", "पश्चिम"],
-    "answer": 1,
-    "explanation": "पूर्व की ओर मुख होने पर दाएँ मुड़ने पर दिशा दक्षिण होती है।",
-    "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
-    "verified": 0,
-    "difficulty": "Easy"
-  },
-  {
-    "exam": "SSC CGL",
-    "subject": "Reasoning",
-    "topic": "Blood Relation",
-    "question": "P, Q की माता है। Q, R का भाई है। P का R से क्या संबंध है?",
-    "options": ["बहन", "माता", "पिता", "बेटी"],
-    "answer": 1,
-    "explanation": "P, Q की माता है और Q तथा R भाई-बहन हैं। इसलिए P, R की माता है।",
-    "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
-    "verified": 0,
-    "difficulty": "Easy"
-  },
-  {
-    "exam": "SSC CGL",
-    "subject": "Reasoning",
-    "topic": "Ranking",
-    "question": "एक पंक्ति में अमित बाएँ से 7वें स्थान पर है और दाएँ से 9वें स्थान पर है। कुल कितने व्यक्ति हैं?",
-    "options": ["14", "15", "16", "17"],
-    "answer": 1,
-    "explanation": "कुल व्यक्ति = 7 + 9 − 1 = 15।",
-    "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
-    "verified": 0,
-    "difficulty": "Easy"
-  },
-  {
-    "exam": "SSC CGL",
-    "subject": "Reasoning",
-    "topic": "Number Series",
-    "question": "श्रृंखला में अगली संख्या क्या होगी? 5, 10, 15, 20, ?",
-    "options": ["22", "24", "25", "30"],
+    "topic": "Number Analogy",
+    "question": "8 : 64 :: 7 : ?",
+    "options": [
+      "42",
+      "48",
+      "49",
+      "56"
+    ],
     "answer": 2,
-    "explanation": "प्रत्येक पद में 5 जोड़ा गया है। 20 + 5 = 25।",
+    "explanation": "संख्या का वर्ग लिया गया है।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_011",
+    "exam": "SSC CGL",
+    "subject": "Reasoning",
+    "topic": "Missing Number",
+    "question": "यदि 3 + 5 = 24 और 4 + 6 = 40, तो 5 + 7 = ?",
+    "options": [
+      "50",
+      "55",
+      "60",
+      "65"
+    ],
+    "answer": 2,
+    "explanation": "a×(a+b) के अनुसार 5×12 = 60।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_012",
+    "exam": "SSC CGL",
+    "subject": "Reasoning",
+    "topic": "Syllogism",
+    "question": "कथन: सभी गुलाब फूल हैं। कुछ फूल लाल हैं। निष्कर्ष: कुछ गुलाब लाल हैं।",
+    "options": [
+      "सही",
+      "गलत",
+      "निष्कर्ष निश्चित नहीं",
+      "दोनों"
+    ],
+    "answer": 2,
+    "explanation": "कुछ फूल लाल होने से यह निश्चित नहीं कि वे गुलाब हैं।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_013",
+    "exam": "SSC CGL",
+    "subject": "Reasoning",
+    "topic": "Clock",
+    "question": "3 बजे घड़ी की दोनों सुइयों के बीच कोण कितना होगा?",
+    "options": [
+      "60°",
+      "90°",
+      "120°",
+      "180°"
+    ],
+    "answer": 1,
+    "explanation": "3 बजे कोण 90° होता है।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_014",
+    "exam": "SSC CGL",
+    "subject": "Reasoning",
+    "topic": "Calendar",
+    "question": "यदि आज सोमवार है, तो 10 दिन बाद कौन-सा दिन होगा?",
+    "options": [
+      "बुधवार",
+      "गुरुवार",
+      "शुक्रवार",
+      "शनिवार"
+    ],
+    "answer": 1,
+    "explanation": "10 mod 7 = 3; सोमवार से 3 दिन बाद गुरुवार।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_015",
+    "exam": "SSC CGL",
+    "subject": "Reasoning",
+    "topic": "Venn Diagram",
+    "question": "पक्षी, कबूतर और जानवर के बीच सही संबंध क्या है?",
+    "options": [
+      "जानवर ⊂ पक्षी ⊂ कबूतर",
+      "कबूतर ⊂ पक्षी ⊂ जानवर",
+      "पक्षी ⊂ कबूतर ⊂ जानवर",
+      "तीनों अलग"
+    ],
+    "answer": 1,
+    "explanation": "कबूतर पक्षी है और पक्षी जानवर हैं।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_016",
+    "exam": "SSC CGL",
+    "subject": "Reasoning",
+    "topic": "Statement",
+    "question": "कथन: सभी विद्यार्थी मेहनती हैं। राज विद्यार्थी है। निष्कर्ष?",
+    "options": [
+      "राज मेहनती है",
+      "राज शिक्षक है",
+      "राज डॉक्टर है",
+      "कोई निष्कर्ष नहीं"
+    ],
+    "answer": 0,
+    "explanation": "राज विद्यार्थी है और सभी विद्यार्थी मेहनती बताए गए हैं।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_017",
+    "exam": "SSC CGL",
+    "subject": "Reasoning",
+    "topic": "Mirror Image",
+    "question": "दर्पण में बाएँ हाथ की वस्तु किस ओर दिखाई देती है?",
+    "options": [
+      "बाएँ",
+      "दाएँ",
+      "ऊपर",
+      "नीचे"
+    ],
+    "answer": 1,
+    "explanation": "दर्पण में पार्श्व उलटाव होता है।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_018",
+    "exam": "SSC CGL",
+    "subject": "Reasoning",
+    "topic": "Paper Folding",
+    "question": "कागज को आधा मोड़कर एक छेद किया गया। खोलने पर कितने छेद होंगे?",
+    "options": [
+      "1",
+      "2",
+      "3",
+      "4"
+    ],
+    "answer": 1,
+    "explanation": "एक बार आधा मोड़ने पर दो परतों में छेद बनता है।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_019",
+    "exam": "SSC CGL",
+    "subject": "Reasoning",
+    "topic": "Series",
+    "question": "श्रृंखला: 5, 10, 20, 40, ?",
+    "options": [
+      "60",
+      "70",
+      "80",
+      "90"
+    ],
+    "answer": 2,
+    "explanation": "हर संख्या दोगुनी हो रही है।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_020",
     "exam": "SSC CGL",
     "subject": "Reasoning",
     "topic": "Classification",
-    "question": "निम्नलिखित में से विषम को चुनिए।",
-    "options": ["सोमवार", "बुधवार", "शुक्रवार", "जनवरी"],
-    "answer": 3,
-    "explanation": "सोमवार, बुधवार और शुक्रवार सप्ताह के दिन हैं, जबकि जनवरी एक महीना है।",
-    "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
-    "verified": 0,
-    "difficulty": "Easy"
-  },
-  {
-    "exam": "SSC CGL",
-    "subject": "Reasoning",
-    "topic": "Analogy",
-    "question": "मछली : जल :: पक्षी : ?",
-    "options": ["जंगल", "आकाश", "भूमि", "पेड़"],
-    "answer": 1,
-    "explanation": "मछली जल में रहती है और पक्षी आकाश में उड़ता है।",
-    "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
-    "verified": 0,
-    "difficulty": "Easy"
-  },
-  {
-    "exam": "SSC CGL",
-    "subject": "Reasoning",
-    "topic": "Alphabet Series",
-    "question": "श्रृंखला में अगला अक्षर क्या होगा? A, C, E, G, ?",
-    "options": ["H", "I", "J", "K"],
-    "answer": 1,
-    "explanation": "प्रत्येक बार एक अक्षर छोड़ा गया है। अगला अक्षर I है।",
-    "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
-    "verified": 0,
-    "difficulty": "Easy"
-  },
-  {
-    "exam": "SSC CGL",
-    "subject": "Reasoning",
-    "topic": "Coding-Decoding",
-    "question": "यदि RAM को SBN लिखा जाता है, तो FAN को किस प्रकार लिखा जाएगा?",
-    "options": ["GBO", "GBM", "EBO", "FBO"],
-    "answer": 0,
-    "explanation": "प्रत्येक अक्षर में 1 जोड़ने पर FAN = GBO।",
-    "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
-    "verified": 0,
-    "difficulty": "Easy"
-  },
-  {
-    "exam": "SSC CGL",
-    "subject": "Reasoning",
-    "topic": "Direction Sense",
-    "question": "मोहन उत्तर की ओर मुख करके खड़ा है। वह बाएँ मुड़ता है। अब उसका मुख किस दिशा में है?",
-    "options": ["पूर्व", "पश्चिम", "उत्तर", "दक्षिण"],
-    "answer": 1,
-    "explanation": "उत्तर की ओर मुख करने पर बाएँ दिशा पश्चिम होती है।",
-    "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
-    "verified": 0,
-    "difficulty": "Easy"
-  },
-  {
-    "exam": "SSC CGL",
-    "subject": "Reasoning",
-    "topic": "Blood Relation",
-    "question": "X, Y का भाई है और Y, Z की बहन है। X का Z से क्या संबंध है?",
-    "options": ["भाई", "बहन", "माता", "पिता"],
-    "answer": 0,
-    "explanation": "X, Y का भाई है और Y तथा Z भाई-बहन हैं। इसलिए X, Z का भाई है।",
-    "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
-    "verified": 0,
-    "difficulty": "Medium"
-  },
-  {
-    "exam": "SSC CGL",
-    "subject": "Reasoning",
-    "topic": "Number Series",
-    "question": "श्रृंखला में अगली संख्या क्या होगी? 1, 4, 9, 16, ?",
-    "options": ["20", "24", "25", "36"],
+    "question": "निम्न में कौन-सा युग्म अलग है?",
+    "options": [
+      "कुत्ता–बिल्ली",
+      "गाय–भैंस",
+      "कबूतर–मछली",
+      "शेर–बाघ"
+    ],
     "answer": 2,
-    "explanation": "ये क्रमशः 1², 2², 3² और 4² हैं। अगली संख्या 5² = 25 होगी।",
+    "explanation": "कबूतर पक्षी है जबकि मछली जलीय जीव है।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_021",
     "exam": "SSC CGL",
     "subject": "Reasoning",
-    "topic": "Classification",
-    "question": "निम्नलिखित में से विषम संख्या चुनिए।",
-    "options": ["2", "3", "5", "9"],
-    "answer": 3,
-    "explanation": "2, 3 और 5 अभाज्य संख्याएँ हैं, जबकि 9 भाज्य संख्या है।",
-    "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
-    "verified": 0,
-    "difficulty": "Easy"
-  },
-  {
-    "exam": "SSC CGL",
-    "subject": "Reasoning",
-    "topic": "Analogy",
-    "question": "डॉक्टर : अस्पताल :: शिक्षक : ?",
-    "options": ["विद्यालय", "बैंक", "अदालत", "डाकघर"],
-    "answer": 0,
-    "explanation": "डॉक्टर अस्पताल में और शिक्षक विद्यालय में कार्य करता है।",
-    "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
-    "verified": 0,
-    "difficulty": "Easy"
-  },
-  {
-    "exam": "SSC CGL",
-    "subject": "Reasoning",
-    "topic": "Odd One Out",
-    "question": "निम्नलिखित में से विषम संख्या चुनिए।",
-    "options": ["8", "27", "64", "100"],
-    "answer": 3,
-    "explanation": "8, 27 और 64 क्रमशः 2³, 3³ और 4³ हैं। 100 पूर्ण घन नहीं है।",
-    "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
-    "verified": 0,
-    "difficulty": "Easy"
-  },
-
-  {
-    "exam": "SSC CGL",
-    "subject": "General Awareness",
-    "topic": "Indian Polity",
-    "question": "भारत का संविधान कब लागू हुआ था?",
-    "options": ["15 अगस्त 1947", "26 नवंबर 1949", "26 जनवरी 1950", "2 अक्टूबर 1950"],
+    "topic": "Operation",
+    "question": "यदि + का अर्थ × और × का अर्थ − है, तो 6 + 3 × 2 = ?",
+    "options": [
+      "12",
+      "14",
+      "16",
+      "18"
+    ],
     "answer": 2,
-    "explanation": "भारत का संविधान 26 जनवरी 1950 को लागू हुआ।",
+    "explanation": "6×3−2 = 16।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_022",
     "exam": "SSC CGL",
-    "subject": "General Awareness",
-    "topic": "Indian Polity",
-    "question": "भारतीय संविधान की प्रस्तावना में कितने प्रकार के न्याय का उल्लेख है?",
-    "options": ["दो", "तीन", "चार", "पाँच"],
+    "subject": "Reasoning",
+    "topic": "Position",
+    "question": "एक पंक्ति में A, B के दाएँ और C के बाएँ है। बीच में कौन है?",
+    "options": [
+      "A",
+      "B",
+      "C",
+      "निर्धारित नहीं"
+    ],
+    "answer": 0,
+    "explanation": "C के बाएँ A और A के दाएँ B होने से A बीच में है।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_023",
+    "exam": "SSC CGL",
+    "subject": "Reasoning",
+    "topic": "Dice",
+    "question": "एक सामान्य पासे में विपरीत फलकों का योग कितना होता है?",
+    "options": [
+      "5",
+      "6",
+      "7",
+      "8"
+    ],
+    "answer": 2,
+    "explanation": "सामान्य पासे में विपरीत फलकों का योग 7 होता है।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_024",
+    "exam": "SSC CGL",
+    "subject": "Reasoning",
+    "topic": "Logical Sequence",
+    "question": "बीज, पौधा, वृक्ष, फल में सही क्रम कौन-सा है?",
+    "options": [
+      "फल → वृक्ष → पौधा → बीज",
+      "बीज → पौधा → वृक्ष → फल",
+      "पौधा → बीज → फल → वृक्ष",
+      "वृक्ष → बीज → पौधा → फल"
+    ],
     "answer": 1,
-    "explanation": "सामाजिक, आर्थिक और राजनीतिक—तीन प्रकार के न्याय का उल्लेख है।",
+    "explanation": "विकास का प्राकृतिक क्रम यही है।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_025",
+    "exam": "SSC CGL",
+    "subject": "Reasoning",
+    "topic": "Alphabet Test",
+    "question": "यदि A=1, B=2,... तो CAT का योग कितना है?",
+    "options": [
+      "22",
+      "23",
+      "24",
+      "25"
+    ],
+    "answer": 2,
+    "explanation": "C=3, A=1, T=20; योग 24।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_026",
     "exam": "SSC CGL",
     "subject": "General Awareness",
-    "topic": "Indian Polity",
+    "topic": "Polity",
+    "question": "भारतीय संविधान कब लागू हुआ?",
+    "options": [
+      "15 अगस्त 1947",
+      "26 जनवरी 1950",
+      "26 नवंबर 1949",
+      "2 अक्टूबर 1950"
+    ],
+    "answer": 1,
+    "explanation": "संविधान 26 जनवरी 1950 को लागू हुआ।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_027",
+    "exam": "SSC CGL",
+    "subject": "General Awareness",
+    "topic": "Polity",
+    "question": "भारतीय संविधान का भाग III किससे संबंधित है?",
+    "options": [
+      "मौलिक अधिकार",
+      "राज्य नीति के निदेशक तत्व",
+      "मौलिक कर्तव्य",
+      "संघ और राज्य संबंध"
+    ],
+    "answer": 0,
+    "explanation": "भाग III मौलिक अधिकारों से संबंधित है।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_028",
+    "exam": "SSC CGL",
+    "subject": "General Awareness",
+    "topic": "Polity",
     "question": "भारत के राष्ट्रपति का चुनाव किसके द्वारा किया जाता है?",
-    "options": ["केवल लोकसभा", "केवल राज्यसभा", "निर्वाचक मंडल", "सर्वोच्च न्यायालय"],
+    "options": [
+      "केवल लोकसभा",
+      "केवल राज्यसभा",
+      "निर्वाचक मंडल",
+      "सीधे जनता"
+    ],
     "answer": 2,
-    "explanation": "राष्ट्रपति का चुनाव निर्वाचक मंडल द्वारा किया जाता है।",
+    "explanation": "राष्ट्रपति का चुनाव निर्वाचक मंडल करता है।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
-    "exam": "SSC CGL",
-    "subject": "General Awareness",
-    "topic": "Indian Polity",
-    "question": "मौलिक अधिकार संविधान के किस भाग में दिए गए हैं?",
-    "options": ["भाग I", "भाग II", "भाग III", "भाग IV"],
-    "answer": 2,
-    "explanation": "मौलिक अधिकार संविधान के भाग III में दिए गए हैं।",
-    "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
-    "verified": 0,
-    "difficulty": "Easy"
-  },
-  {
+    "id": "ssc_cgl_p_029",
     "exam": "SSC CGL",
     "subject": "General Awareness",
     "topic": "History",
-    "question": "सिंधु घाटी सभ्यता का प्रसिद्ध बंदरगाह कौन-सा था?",
-    "options": ["हड़प्पा", "मोहनजोदड़ो", "लोथल", "कालीबंगा"],
+    "question": "सिंधु सभ्यता का प्रसिद्ध बंदरगाह कौन-सा था?",
+    "options": [
+      "हड़प्पा",
+      "मोहनजोदड़ो",
+      "लोथल",
+      "कालीबंगा"
+    ],
     "answer": 2,
-    "explanation": "लोथल गुजरात में स्थित एक महत्वपूर्ण प्राचीन बंदरगाह था।",
+    "explanation": "लोथल गुजरात में स्थित प्रमुख बंदरगाह था।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_030",
     "exam": "SSC CGL",
     "subject": "General Awareness",
     "topic": "History",
-    "question": "पानीपत का प्रथम युद्ध किस वर्ष हुआ था?",
-    "options": ["1526", "1556", "1761", "1498"],
+    "question": "प्रथम पानीपत का युद्ध कब हुआ?",
+    "options": [
+      "1526",
+      "1556",
+      "1761",
+      "1857"
+    ],
     "answer": 0,
-    "explanation": "पानीपत का प्रथम युद्ध 1526 में बाबर और इब्राहिम लोदी के बीच हुआ।",
+    "explanation": "प्रथम पानीपत का युद्ध 1526 में हुआ।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_031",
     "exam": "SSC CGL",
     "subject": "General Awareness",
     "topic": "History",
-    "question": "असहयोग आंदोलन किस वर्ष शुरू हुआ था?",
-    "options": ["1919", "1920", "1930", "1942"],
-    "answer": 1,
-    "explanation": "असहयोग आंदोलन 1920 में शुरू हुआ था।",
-    "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
-    "verified": 0,
-    "difficulty": "Easy"
-  },
-  {
-    "exam": "SSC CGL",
-    "subject": "General Awareness",
-    "topic": "History",
-    "question": "भारत छोड़ो आंदोलन किस वर्ष शुरू हुआ था?",
-    "options": ["1935", "1939", "1942", "1946"],
+    "question": "असहयोग आंदोलन किस वर्ष शुरू हुआ?",
+    "options": [
+      "1915",
+      "1919",
+      "1920",
+      "1930"
+    ],
     "answer": 2,
-    "explanation": "भारत छोड़ो आंदोलन अगस्त 1942 में शुरू हुआ था।",
+    "explanation": "महात्मा गांधी ने 1920 में असहयोग आंदोलन शुरू किया।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_032",
+    "exam": "SSC CGL",
+    "subject": "General Awareness",
+    "topic": "History",
+    "question": "भारत छोड़ो आंदोलन किस वर्ष शुरू हुआ?",
+    "options": [
+      "1935",
+      "1940",
+      "1942",
+      "1947"
+    ],
+    "answer": 2,
+    "explanation": "भारत छोड़ो आंदोलन 1942 में शुरू हुआ।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_033",
     "exam": "SSC CGL",
     "subject": "General Awareness",
     "topic": "Geography",
-    "question": "भारत में बहने वाली सबसे लंबी नदी कौन-सी है?",
-    "options": ["यमुना", "गंगा", "गोदावरी", "नर्मदा"],
+    "question": "गंगा नदी का उद्गम किस हिमनद से माना जाता है?",
+    "options": [
+      "सियाचिन",
+      "गंगोत्री",
+      "पिंडारी",
+      "यमुनोत्री"
+    ],
     "answer": 1,
-    "explanation": "भारत में बहने वाली सबसे लंबी नदी गंगा है।",
+    "explanation": "भागीरथी का उद्गम गंगोत्री हिमनद से होता है।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_034",
     "exam": "SSC CGL",
     "subject": "General Awareness",
     "topic": "Geography",
-    "question": "भारत में स्थित सबसे ऊँची पर्वत चोटी कौन-सी है?",
-    "options": ["नंदा देवी", "कंचनजंघा", "कामेत", "अनामुडी"],
+    "question": "भारत की सबसे ऊँची पर्वत चोटी कौन-सी है?",
+    "options": [
+      "नंदा देवी",
+      "कंचनजंघा",
+      "अनामुडी",
+      "धौलागिरि"
+    ],
     "answer": 1,
-    "explanation": "कंचनजंघा भारत की सबसे ऊँची पर्वत चोटी है।",
+    "explanation": "भारत में स्थित सबसे ऊँची चोटी कंचनजंघा है।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_035",
     "exam": "SSC CGL",
     "subject": "General Awareness",
     "topic": "Geography",
     "question": "क्षेत्रफल की दृष्टि से भारत का सबसे बड़ा राज्य कौन-सा है?",
-    "options": ["मध्य प्रदेश", "उत्तर प्रदेश", "राजस्थान", "महाराष्ट्र"],
+    "options": [
+      "मध्य प्रदेश",
+      "महाराष्ट्र",
+      "राजस्थान",
+      "उत्तर प्रदेश"
+    ],
     "answer": 2,
-    "explanation": "क्षेत्रफल की दृष्टि से राजस्थान सबसे बड़ा राज्य है।",
+    "explanation": "राजस्थान क्षेत्रफल में सबसे बड़ा राज्य है।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_036",
     "exam": "SSC CGL",
     "subject": "General Awareness",
     "topic": "Geography",
-    "question": "भारत में सबसे लंबी समुद्री तटरेखा वाला राज्य कौन-सा है?",
-    "options": ["महाराष्ट्र", "गुजरात", "तमिलनाडु", "आंध्र प्रदेश"],
-    "answer": 1,
-    "explanation": "राज्यों में गुजरात की समुद्री तटरेखा सबसे लंबी है।",
+    "question": "भारत में सबसे लंबी तटरेखा वाला राज्य कौन-सा है?",
+    "options": [
+      "गुजरात",
+      "तमिलनाडु",
+      "आंध्र प्रदेश",
+      "केरल"
+    ],
+    "answer": 0,
+    "explanation": "गुजरात की तटरेखा सबसे लंबी है।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_037",
     "exam": "SSC CGL",
     "subject": "General Awareness",
     "topic": "Economy",
-    "question": "भारतीय रिजर्व बैंक की स्थापना किस वर्ष हुई थी?",
-    "options": ["1930", "1935", "1947", "1950"],
+    "question": "भारतीय रिजर्व बैंक की स्थापना कब हुई?",
+    "options": [
+      "1930",
+      "1935",
+      "1947",
+      "1950"
+    ],
     "answer": 1,
-    "explanation": "RBI की स्थापना 1 अप्रैल 1935 को हुई थी।",
+    "explanation": "RBI की स्थापना 1935 में हुई।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_038",
     "exam": "SSC CGL",
     "subject": "General Awareness",
     "topic": "Economy",
-    "question": "भारत में मौद्रिक नीति का संचालन मुख्य रूप से कौन करता है?",
-    "options": ["वित्त मंत्रालय", "RBI", "नीति आयोग", "SEBI"],
+    "question": "मौद्रिक नीति मुख्यतः किस संस्था द्वारा संचालित की जाती है?",
+    "options": [
+      "SEBI",
+      "RBI",
+      "NITI Aayog",
+      "Finance Commission"
+    ],
     "answer": 1,
-    "explanation": "भारत में मौद्रिक नीति का संचालन RBI करता है।",
+    "explanation": "भारत में मौद्रिक नीति RBI संचालित करता है।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_039",
     "exam": "SSC CGL",
     "subject": "General Awareness",
     "topic": "Economy",
-    "question": "GST का पूरा नाम क्या है?",
-    "options": ["General Sales Tax", "Goods and Services Tax", "Government Service Tax", "Goods Supply Tax"],
+    "question": "GST भारत में कब लागू हुआ?",
+    "options": [
+      "1 जनवरी 2016",
+      "1 जुलाई 2017",
+      "15 अगस्त 2017",
+      "1 अप्रैल 2018"
+    ],
     "answer": 1,
-    "explanation": "GST का पूरा नाम Goods and Services Tax है।",
+    "explanation": "GST 1 जुलाई 2017 को लागू हुआ।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_040",
     "exam": "SSC CGL",
     "subject": "General Awareness",
     "topic": "Science",
-    "question": "मानव शरीर में रक्त को पंप करने वाला अंग कौन-सा है?",
-    "options": ["फेफड़ा", "हृदय", "यकृत", "गुर्दा"],
-    "answer": 1,
-    "explanation": "हृदय रक्त को पूरे शरीर में पंप करता है।",
+    "question": "मानव हृदय में कितने कक्ष होते हैं?",
+    "options": [
+      "2",
+      "3",
+      "4",
+      "5"
+    ],
+    "answer": 2,
+    "explanation": "मानव हृदय में चार कक्ष होते हैं।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_041",
     "exam": "SSC CGL",
     "subject": "General Awareness",
     "topic": "Science",
     "question": "प्रकाश संश्लेषण में पौधे मुख्यतः किस गैस का उपयोग करते हैं?",
-    "options": ["ऑक्सीजन", "नाइट्रोजन", "कार्बन डाइऑक्साइड", "हाइड्रोजन"],
+    "options": [
+      "ऑक्सीजन",
+      "नाइट्रोजन",
+      "कार्बन डाइऑक्साइड",
+      "हाइड्रोजन"
+    ],
     "answer": 2,
-    "explanation": "प्रकाश संश्लेषण में पौधे कार्बन डाइऑक्साइड का उपयोग करते हैं।",
+    "explanation": "पौधे CO2 का उपयोग करते हैं।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_042",
     "exam": "SSC CGL",
     "subject": "General Awareness",
     "topic": "Science",
     "question": "विटामिन C की कमी से कौन-सा रोग होता है?",
-    "options": ["रिकेट्स", "स्कर्वी", "बेरी-बेरी", "रतौंधी"],
+    "options": [
+      "रिकेट्स",
+      "स्कर्वी",
+      "बेरी-बेरी",
+      "रातांधता"
+    ],
     "answer": 1,
     "explanation": "विटामिन C की कमी से स्कर्वी होता है।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_043",
     "exam": "SSC CGL",
     "subject": "General Awareness",
     "topic": "Science",
     "question": "जल का रासायनिक सूत्र क्या है?",
-    "options": ["CO₂", "H₂O", "O₂", "H₂SO₄"],
+    "options": [
+      "CO2",
+      "H2O",
+      "O2",
+      "NaCl"
+    ],
     "answer": 1,
-    "explanation": "जल का रासायनिक सूत्र H₂O है।",
+    "explanation": "जल का सूत्र H2O है।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_044",
     "exam": "SSC CGL",
     "subject": "General Awareness",
-    "topic": "Art and Culture",
+    "topic": "Art & Culture",
     "question": "भरतनाट्यम किस राज्य का प्रमुख शास्त्रीय नृत्य है?",
-    "options": ["केरल", "तमिलनाडु", "असम", "ओडिशा"],
+    "options": [
+      "केरल",
+      "तमिलनाडु",
+      "असम",
+      "ओडिशा"
+    ],
     "answer": 1,
     "explanation": "भरतनाट्यम तमिलनाडु से संबंधित है।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_045",
     "exam": "SSC CGL",
     "subject": "General Awareness",
-    "topic": "Art and Culture",
-    "question": "कथकली किस राज्य की प्रसिद्ध शास्त्रीय नृत्य-नाट्य परंपरा है?",
-    "options": ["केरल", "गुजरात", "पंजाब", "बिहार"],
+    "topic": "Art & Culture",
+    "question": "कथकली किस राज्य से संबंधित है?",
+    "options": [
+      "केरल",
+      "मणिपुर",
+      "गुजरात",
+      "पंजाब"
+    ],
     "answer": 0,
-    "explanation": "कथकली केरल की प्रसिद्ध नृत्य-नाट्य परंपरा है।",
+    "explanation": "कथकली केरल का शास्त्रीय नृत्य-नाट्य है।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_046",
     "exam": "SSC CGL",
     "subject": "General Awareness",
     "topic": "Sports",
-    "question": "क्रिकेट में एक ओवर में सामान्यतः कितनी वैध गेंदें होती हैं?",
-    "options": ["4", "5", "6", "8"],
-    "answer": 2,
-    "explanation": "एक सामान्य ओवर में 6 वैध गेंदें होती हैं।",
+    "question": "क्रिकेट के एक ओवर में कितनी वैध गेंदें होती हैं?",
+    "options": [
+      "5",
+      "6",
+      "7",
+      "8"
+    ],
+    "answer": 1,
+    "explanation": "एक ओवर में 6 वैध गेंदें होती हैं।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_047",
     "exam": "SSC CGL",
     "subject": "General Awareness",
-    "topic": "Important Days",
-    "question": "भारत में राष्ट्रीय विज्ञान दिवस कब मनाया जाता है?",
-    "options": ["28 फरवरी", "5 जून", "15 अगस्त", "11 मई"],
+    "topic": "Science",
+    "question": "राष्ट्रीय विज्ञान दिवस भारत में कब मनाया जाता है?",
+    "options": [
+      "28 फरवरी",
+      "5 जून",
+      "15 अगस्त",
+      "14 नवंबर"
+    ],
     "answer": 0,
     "explanation": "राष्ट्रीय विज्ञान दिवस 28 फरवरी को मनाया जाता है।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_048",
     "exam": "SSC CGL",
     "subject": "General Awareness",
-    "topic": "Science",
-    "question": "मानव शरीर का सामान्य तापमान लगभग कितना माना जाता है?",
-    "options": ["35°C", "37°C", "39°C", "41°C"],
+    "topic": "Polity",
+    "question": "भारतीय संविधान की प्रस्तावना में न्याय के कितने प्रकारों का उल्लेख है?",
+    "options": [
+      "2",
+      "3",
+      "4",
+      "5"
+    ],
     "answer": 1,
-    "explanation": "मानव शरीर का सामान्य तापमान लगभग 37°C माना जाता है।",
+    "explanation": "सामाजिक, आर्थिक और राजनीतिक—तीन प्रकार के न्याय।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_049",
     "exam": "SSC CGL",
     "subject": "General Awareness",
-    "topic": "Science",
-    "question": "पृथ्वी का एकमात्र प्राकृतिक उपग्रह कौन-सा है?",
-    "options": ["मंगल", "चंद्रमा", "शुक्र", "सूर्य"],
-    "answer": 1,
-    "explanation": "चंद्रमा पृथ्वी का प्राकृतिक उपग्रह है।",
-    "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
-    "verified": 0,
-    "difficulty": "Easy"
-  },
-
-  {
-    "exam": "SSC CGL",
-    "subject": "Quantitative Aptitude",
-    "topic": "Percentage",
-    "question": "किसी संख्या का 25% = 80 है। वह संख्या क्या है?",
-    "options": ["240", "280", "320", "360"],
+    "topic": "Polity",
+    "question": "मौलिक कर्तव्य संविधान के किस भाग में हैं?",
+    "options": [
+      "भाग III",
+      "भाग IV",
+      "भाग IVA",
+      "भाग V"
+    ],
     "answer": 2,
-    "explanation": "संख्या = 80 × 100/25 = 320।",
+    "explanation": "मौलिक कर्तव्य भाग IVA में हैं।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_050",
     "exam": "SSC CGL",
-    "subject": "Quantitative Aptitude",
-    "topic": "Discount",
-    "question": "एक वस्तु का अंकित मूल्य ₹800 है। उस पर 15% की छूट दी जाती है। विक्रय मूल्य क्या होगा?",
-    "options": ["₹660", "₹680", "₹700", "₹720"],
+    "subject": "General Awareness",
+    "topic": "Economy",
+    "question": "भारत में बैंक नोट जारी करने का प्रमुख अधिकार किसके पास है?",
+    "options": [
+      "RBI",
+      "SEBI",
+      "SBI",
+      "वित्त आयोग"
+    ],
+    "answer": 0,
+    "explanation": "एक रुपये के नोट को छोड़कर बैंक नोट RBI जारी करता है।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_051",
+    "exam": "SSC CGL",
+    "subject": "Maths",
+    "topic": "Percentage",
+    "question": "किसी संख्या का 25% = 80 है। संख्या क्या है?",
+    "options": [
+      "240",
+      "280",
+      "320",
+      "360"
+    ],
+    "answer": 2,
+    "explanation": "80×100/25 = 320।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_052",
+    "exam": "SSC CGL",
+    "subject": "Maths",
+    "topic": "Percentage",
+    "question": "800 रुपये की वस्तु पर 15% छूट मिले तो विक्रय मूल्य कितना होगा?",
+    "options": [
+      "660",
+      "680",
+      "700",
+      "720"
+    ],
     "answer": 1,
-    "explanation": "छूट ₹120 है। विक्रय मूल्य = ₹800 − ₹120 = ₹680।",
+    "explanation": "800−120 = 680।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_053",
     "exam": "SSC CGL",
-    "subject": "Quantitative Aptitude",
+    "subject": "Maths",
     "topic": "Simple Interest",
-    "question": "₹5000 पर 8% वार्षिक दर से 2 वर्ष का साधारण ब्याज कितना होगा?",
-    "options": ["₹600", "₹700", "₹800", "₹900"],
-    "answer": 2,
-    "explanation": "SI = PRT/100 = ₹800।",
+    "question": "5000 रुपये पर 8% वार्षिक दर से 2 वर्ष का साधारण ब्याज कितना होगा?",
+    "options": [
+      "600",
+      "800",
+      "900",
+      "1000"
+    ],
+    "answer": 1,
+    "explanation": "SI = 5000×8×2/100 = 800।",
     "kind": "Practice",
-    "year": null,
-    "shift": null,
-    "source": "Original Practice Question",
     "verified": 0,
-    "difficulty": "Easy"
+    "source": "Original Practice Question"
   },
   {
+    "id": "ssc_cgl_p_054",
     "exam": "SSC CGL",
-    "subject": "Quantitative Aptitude",
+    "subject": "Maths",
     "topic": "Percentage",
-    "question": "एक संख्या में 20% की वृद्धि करने पर 360 प्राप्त होता है। मूल संख्या क्या थी?",
-    "options": ["280", "300", "320", "340"],
+    "question": "किसी संख्या में 20% वृद्धि करने पर 360 प्राप्त होता है। मूल संख्या क्या थी?",
+    "options": [
+      "280",
+      "300",
+      "320",
+      "340"
+    ],
     "answer": 1,
-    "explanation": "
+    "explanation": "मूल संख्या = 360/1.2 = 300।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_055",
+    "exam": "SSC CGL",
+    "subject": "Maths",
+    "topic": "Ratio",
+    "question": "3:5 के अनुपात में दो संख्याओं का योग 64 है। छोटी संख्या क्या है?",
+    "options": [
+      "20",
+      "24",
+      "28",
+      "32"
+    ],
+    "answer": 1,
+    "explanation": "8 भाग = 64, 3 भाग = 24।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_056",
+    "exam": "SSC CGL",
+    "subject": "Maths",
+    "topic": "LCM",
+    "question": "12, 18 और 24 का LCM क्या है?",
+    "options": [
+      "36",
+      "48",
+      "72",
+      "96"
+    ],
+    "answer": 2,
+    "explanation": "LCM = 72।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_057",
+    "exam": "SSC CGL",
+    "subject": "Maths",
+    "topic": "HCF",
+    "question": "48 और 72 का HCF क्या है?",
+    "options": [
+      "12",
+      "18",
+      "24",
+      "36"
+    ],
+    "answer": 2,
+    "explanation": "महत्तम समापवर्तक 24 है।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_058",
+    "exam": "SSC CGL",
+    "subject": "Maths",
+    "topic": "Time Speed Distance",
+    "question": "60 किमी/घंटा की गति से 2.5 घंटे में कितनी दूरी तय होगी?",
+    "options": [
+      "120 किमी",
+      "150 किमी",
+      "180 किमी",
+      "200 किमी"
+    ],
+    "answer": 1,
+    "explanation": "दूरी = 60×2.5 = 150 किमी।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_059",
+    "exam": "SSC CGL",
+    "subject": "Maths",
+    "topic": "Time Speed Distance",
+    "question": "5 किमी/घंटा की गति से 3 घंटे में दूरी कितनी होगी?",
+    "options": [
+      "10 किमी",
+      "12 किमी",
+      "15 किमी",
+      "18 किमी"
+    ],
+    "answer": 2,
+    "explanation": "दूरी = 5×3 = 15 किमी।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_060",
+    "exam": "SSC CGL",
+    "subject": "Maths",
+    "topic": "Time & Work",
+    "question": "A अकेले किसी काम को 12 दिन में और B 18 दिन में करता है। दोनों मिलकर काम कितने दिन में करेंगे?",
+    "options": [
+      "6 दिन",
+      "7.2 दिन",
+      "8 दिन",
+      "9 दिन"
+    ],
+    "answer": 1,
+    "explanation": "संयुक्त दर = 1/12+1/18=5/36, समय=36/5=7.2 दिन।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_061",
+    "exam": "SSC CGL",
+    "subject": "Maths",
+    "topic": "Profit Loss",
+    "question": "किसी वस्तु का क्रय मूल्य 600 और विक्रय मूल्य 720 है। लाभ प्रतिशत क्या है?",
+    "options": [
+      "15%",
+      "18%",
+      "20%",
+      "25%"
+    ],
+    "answer": 2,
+    "explanation": "लाभ 120; 120/600×100 = 20%।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_062",
+    "exam": "SSC CGL",
+    "subject": "Maths",
+    "topic": "Profit Loss",
+    "question": "900 रुपये में बेचने पर 10% हानि होती है। क्रय मूल्य कितना है?",
+    "options": [
+      "950",
+      "1000",
+      "1050",
+      "1100"
+    ],
+    "answer": 1,
+    "explanation": "SP = 90% of CP, इसलिए CP = 900/0.9 = 1000।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_063",
+    "exam": "SSC CGL",
+    "subject": "Maths",
+    "topic": "Average",
+    "question": "5 संख्याओं का औसत 24 है। उनका योग क्या होगा?",
+    "options": [
+      "96",
+      "110",
+      "120",
+      "125"
+    ],
+    "answer": 2,
+    "explanation": "योग = औसत×संख्या = 24×5 = 120।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_064",
+    "exam": "SSC CGL",
+    "subject": "Maths",
+    "topic": "Average",
+    "question": "3 संख्याओं का औसत 18 है। दो संख्याएँ 12 और 20 हैं। तीसरी संख्या क्या है?",
+    "options": [
+      "20",
+      "22",
+      "24",
+      "26"
+    ],
+    "answer": 1,
+    "explanation": "कुल 54; तीसरी = 54−32 = 22।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_065",
+    "exam": "SSC CGL",
+    "subject": "Maths",
+    "topic": "Algebra",
+    "question": "x + 7 = 19 हो तो x का मान क्या है?",
+    "options": [
+      "10",
+      "11",
+      "12",
+      "13"
+    ],
+    "answer": 2,
+    "explanation": "x = 19−7 = 12।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_066",
+    "exam": "SSC CGL",
+    "subject": "Maths",
+    "topic": "Algebra",
+    "question": "3x = 45 हो तो x = ?",
+    "options": [
+      "12",
+      "15",
+      "18",
+      "20"
+    ],
+    "answer": 1,
+    "explanation": "x = 45/3 = 15।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_067",
+    "exam": "SSC CGL",
+    "subject": "Maths",
+    "topic": "Mensuration",
+    "question": "आयत की लंबाई 12 सेमी और चौड़ाई 8 सेमी है। क्षेत्रफल क्या होगा?",
+    "options": [
+      "80",
+      "96",
+      "100",
+      "120"
+    ],
+    "answer": 1,
+    "explanation": "क्षेत्रफल = 12×8 = 96 वर्ग सेमी।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_068",
+    "exam": "SSC CGL",
+    "subject": "Maths",
+    "topic": "Mensuration",
+    "question": "वर्ग की भुजा 9 सेमी है। परिमाप कितना होगा?",
+    "options": [
+      "18",
+      "27",
+      "36",
+      "81"
+    ],
+    "answer": 2,
+    "explanation": "परिमाप = 4×9 = 36 सेमी।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_069",
+    "exam": "SSC CGL",
+    "subject": "Maths",
+    "topic": "Mensuration",
+    "question": "त्रिज्या 7 सेमी वाले वृत्त का क्षेत्रफल कितना होगा? π=22/7",
+    "options": [
+      "144",
+      "154",
+      "164",
+      "176"
+    ],
+    "answer": 1,
+    "explanation": "क्षेत्रफल = 22/7×49 = 154 वर्ग सेमी।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_070",
+    "exam": "SSC CGL",
+    "subject": "Maths",
+    "topic": "Geometry",
+    "question": "समकोण त्रिभुज की दो भुजाएँ 6 सेमी और 8 सेमी हैं। कर्ण कितना होगा?",
+    "options": [
+      "9",
+      "10",
+      "12",
+      "14"
+    ],
+    "answer": 1,
+    "explanation": "पाइथागोरस: √(36+64)=10।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_071",
+    "exam": "SSC CGL",
+    "subject": "Maths",
+    "topic": "Pipes",
+    "question": "एक पाइप टंकी को 6 घंटे में भरता है। एक घंटे में टंकी का कितना भाग भरेगा?",
+    "options": [
+      "1/3",
+      "1/4",
+      "1/5",
+      "1/6"
+    ],
+    "answer": 3,
+    "explanation": "प्रति घंटे भाग = 1/6।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_072",
+    "exam": "SSC CGL",
+    "subject": "Maths",
+    "topic": "Compound Interest",
+    "question": "1000 रुपये पर 10% वार्षिक चक्रवृद्धि ब्याज की 2 वर्ष की राशि क्या होगी?",
+    "options": [
+      "1200",
+      "1210",
+      "1220",
+      "1240"
+    ],
+    "answer": 1,
+    "explanation": "राशि = 1000×1.1² = 1210।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_073",
+    "exam": "SSC CGL",
+    "subject": "Maths",
+    "topic": "Ratio",
+    "question": "लड़के और लड़कियों का अनुपात 3:2 है और कुल 40 हैं। लड़कियाँ कितनी हैं?",
+    "options": [
+      "12",
+      "16",
+      "20",
+      "24"
+    ],
+    "answer": 1,
+    "explanation": "5 भाग = 40, 2 भाग = 16।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_074",
+    "exam": "SSC CGL",
+    "subject": "Maths",
+    "topic": "Ratio",
+    "question": "A का 40% = B का 60% है। A:B क्या है?",
+    "options": [
+      "2:3",
+      "3:2",
+      "4:3",
+      "3:4"
+    ],
+    "answer": 1,
+    "explanation": "0.4A=0.6B ⇒ A:B=3:2।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_075",
+    "exam": "SSC CGL",
+    "subject": "Maths",
+    "topic": "Discount",
+    "question": "1000 रुपये के अंकित मूल्य पर 20% छूट है। भुगतान कितना करना होगा?",
+    "options": [
+      "750",
+      "800",
+      "820",
+      "850"
+    ],
+    "answer": 1,
+    "explanation": "1000−200 = 800।",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_076",
+    "exam": "SSC CGL",
+    "subject": "English",
+    "topic": "Grammar",
+    "question": "Choose the correct article: He is ___ honest man.",
+    "options": [
+      "a",
+      "an",
+      "the",
+      "no article"
+    ],
+    "answer": 1,
+    "explanation": "The word honest begins with a vowel sound, so 'an' is used.",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_077",
+    "exam": "SSC CGL",
+    "subject": "English",
+    "topic": "Grammar",
+    "question": "Choose the correct form: She ___ to school every day.",
+    "options": [
+      "go",
+      "goes",
+      "going",
+      "gone"
+    ],
+    "answer": 1,
+    "explanation": "With singular subject 'She', the simple present takes 'goes'.",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_078",
+    "exam": "SSC CGL",
+    "subject": "English",
+    "topic": "Vocabulary",
+    "question": "Choose the synonym of 'Rapid'.",
+    "options": [
+      "Slow",
+      "Fast",
+      "Weak",
+      "Late"
+    ],
+    "answer": 1,
+    "explanation": "Rapid means fast.",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_079",
+    "exam": "SSC CGL",
+    "subject": "English",
+    "topic": "Vocabulary",
+    "question": "Choose the antonym of 'Ancient'.",
+    "options": [
+      "Old",
+      "Modern",
+      "Historic",
+      "Early"
+    ],
+    "answer": 1,
+    "explanation": "Modern is the opposite of ancient.",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_080",
+    "exam": "SSC CGL",
+    "subject": "English",
+    "topic": "Grammar",
+    "question": "Choose the correct preposition: He is good ___ mathematics.",
+    "options": [
+      "in",
+      "at",
+      "on",
+      "for"
+    ],
+    "answer": 1,
+    "explanation": "The standard expression is 'good at'.",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_081",
+    "exam": "SSC CGL",
+    "subject": "English",
+    "topic": "Grammar",
+    "question": "Neither Ram nor Shyam ___ present.",
+    "options": [
+      "are",
+      "were",
+      "is",
+      "have"
+    ],
+    "answer": 2,
+    "explanation": "With neither...nor, the verb agrees with the nearer singular subject Shyam.",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_082",
+    "exam": "SSC CGL",
+    "subject": "English",
+    "topic": "Grammar",
+    "question": "Choose the correctly spelt word.",
+    "options": [
+      "Enviroment",
+      "Environment",
+      "Envirnoment",
+      "Enviornment"
+    ],
+    "answer": 1,
+    "explanation": "Environment is the correct spelling.",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_083",
+    "exam": "SSC CGL",
+    "subject": "English",
+    "topic": "Vocabulary",
+    "question": "Choose the synonym of 'Brief'.",
+    "options": [
+      "Long",
+      "Short",
+      "Heavy",
+      "Difficult"
+    ],
+    "answer": 1,
+    "explanation": "Brief means short.",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_084",
+    "exam": "SSC CGL",
+    "subject": "English",
+    "topic": "Vocabulary",
+    "question": "Choose the antonym of 'Expand'.",
+    "options": [
+      "Increase",
+      "Contract",
+      "Extend",
+      "Grow"
+    ],
+    "answer": 1,
+    "explanation": "Contract means become smaller; it is opposite of expand.",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_085",
+    "exam": "SSC CGL",
+    "subject": "English",
+    "topic": "Grammar",
+    "question": "Identify the noun in the sentence: 'Honesty is the best policy.'",
+    "options": [
+      "best",
+      "is",
+      "Honesty",
+      "the"
+    ],
+    "answer": 2,
+    "explanation": "Honesty is a noun.",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_086",
+    "exam": "SSC CGL",
+    "subject": "English",
+    "topic": "Grammar",
+    "question": "Choose the correct tense: They ___ the work yesterday.",
+    "options": [
+      "complete",
+      "completed",
+      "will complete",
+      "completing"
+    ],
+    "answer": 1,
+    "explanation": "'Yesterday' indicates simple past: completed.",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_087",
+    "exam": "SSC CGL",
+    "subject": "English",
+    "topic": "Grammar",
+    "question": "Choose the correct passive voice: 'The police arrested the thief.'",
+    "options": [
+      "The thief arrested the police.",
+      "The thief was arrested by the police.",
+      "The thief is arrested by police.",
+      "The police was arrested by the thief."
+    ],
+    "answer": 1,
+    "explanation": "Simple past passive is 'was/were + past participle'.",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_088",
+    "exam": "SSC CGL",
+    "subject": "English",
+    "topic": "Grammar",
+    "question": "Choose the correct indirect speech: He said, 'I am tired.'",
+    "options": [
+      "He said that I am tired.",
+      "He said that he was tired.",
+      "He says that he was tired.",
+      "He said he is tired yesterday."
+    ],
+    "answer": 1,
+    "explanation": "In reported speech, am changes to was and I to he.",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_089",
+    "exam": "SSC CGL",
+    "subject": "English",
+    "topic": "Vocabulary",
+    "question": "Choose the meaning of 'Optimistic'.",
+    "options": [
+      "Hopeful",
+      "Angry",
+      "Careless",
+      "Fearful"
+    ],
+    "answer": 0,
+    "explanation": "Optimistic means hopeful about the future.",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_090",
+    "exam": "SSC CGL",
+    "subject": "English",
+    "topic": "Vocabulary",
+    "question": "Choose the synonym of 'Abandon'.",
+    "options": [
+      "Leave",
+      "Collect",
+      "Build",
+      "Protect"
+    ],
+    "answer": 0,
+    "explanation": "Abandon means leave.",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_091",
+    "exam": "SSC CGL",
+    "subject": "English",
+    "topic": "Vocabulary",
+    "question": "Choose the antonym of 'Scarce'.",
+    "options": [
+      "Rare",
+      "Limited",
+      "Abundant",
+      "Small"
+    ],
+    "answer": 2,
+    "explanation": "Abundant is the opposite of scarce.",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_092",
+    "exam": "SSC CGL",
+    "subject": "English",
+    "topic": "Grammar",
+    "question": "Fill in the blank: She has been living here ___ 2019.",
+    "options": [
+      "for",
+      "since",
+      "from",
+      "by"
+    ],
+    "answer": 1,
+    "explanation": "Use 'since' with a point of time such as 2019.",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_093",
+    "exam": "SSC CGL",
+    "subject": "English",
+    "topic": "Grammar",
+    "question": "Fill in the blank: I have waited ___ two hours.",
+    "options": [
+      "since",
+      "for",
+      "from",
+      "at"
+    ],
+    "answer": 1,
+    "explanation": "Use 'for' with a duration.",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_094",
+    "exam": "SSC CGL",
+    "subject": "English",
+    "topic": "Grammar",
+    "question": "Choose the correct comparative: This book is ___ than that one.",
+    "options": [
+      "good",
+      "better",
+      "best",
+      "more good"
+    ],
+    "answer": 1,
+    "explanation": "The comparative form of good is better.",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_095",
+    "exam": "SSC CGL",
+    "subject": "English",
+    "topic": "Grammar",
+    "question": "Choose the correct conjunction: Work hard ___ you will fail.",
+    "options": [
+      "and",
+      "or",
+      "but",
+      "because"
+    ],
+    "answer": 1,
+    "explanation": "'Work hard or you will fail' expresses an alternative/consequence.",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_096",
+    "exam": "SSC CGL",
+    "subject": "English",
+    "topic": "Vocabulary",
+    "question": "One word for 'A person who cannot read or write' is:",
+    "options": [
+      "Literate",
+      "Illiterate",
+      "Scholar",
+      "Author"
+    ],
+    "answer": 1,
+    "explanation": "Illiterate means unable to read or write.",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_097",
+    "exam": "SSC CGL",
+    "subject": "English",
+    "topic": "Vocabulary",
+    "question": "One word for 'A place where books are kept' is:",
+    "options": [
+      "Laboratory",
+      "Library",
+      "Museum",
+      "Factory"
+    ],
+    "answer": 1,
+    "explanation": "A library is a place where books are kept.",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_098",
+    "exam": "SSC CGL",
+    "subject": "English",
+    "topic": "Grammar",
+    "question": "Choose the correct sentence.",
+    "options": [
+      "He do not know me.",
+      "He does not know me.",
+      "He does not knows me.",
+      "He not knows me."
+    ],
+    "answer": 1,
+    "explanation": "With 'He', use does not + base verb.",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_099",
+    "exam": "SSC CGL",
+    "subject": "English",
+    "topic": "Grammar",
+    "question": "Choose the correct plural of 'Child'.",
+    "options": [
+      "Childs",
+      "Childes",
+      "Children",
+      "Childrens"
+    ],
+    "answer": 2,
+    "explanation": "The irregular plural of child is children.",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  },
+  {
+    "id": "ssc_cgl_p_100",
+    "exam": "SSC CGL",
+    "subject": "English",
+    "topic": "Reading/Grammar",
+    "question": "Choose the correct word: The Ganga is ___ important river of India.",
+    "options": [
+      "a",
+      "an",
+      "the",
+      "no article"
+    ],
+    "answer": 2,
+    "explanation": "'The Ganga' is a specific proper name, so 'the' is used.",
+    "kind": "Practice",
+    "verified": 0,
+    "source": "Original Practice Question"
+  }
+    ]

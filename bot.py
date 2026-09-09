@@ -1232,5 +1232,6 @@ async def finish_mock(
         else:
 
             wrong += 1
-
+if __name__ == "__main__":
+    main()
    

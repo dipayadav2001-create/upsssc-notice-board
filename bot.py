@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import time
 import sqlite3
@@ -17,6 +18,8 @@ from telegram.ext import (
     CommandHandler,
     CallbackQueryHandler,
     ContextTypes,
+    MessageHandler,
+    filters,
 )
 
 
@@ -25,6 +28,8 @@ from telegram.ext import (
 # =========================================================
 
 TOKEN = os.getenv("BOT_TOKEN")
+
+ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 
 PORT = int(os.getenv("PORT", "10000"))
 
@@ -47,7 +52,7 @@ NEGATIVE_MARK = 0.25
 
 
 # =========================================================
-# RENDER HEALTH SERVER
+# HEALTH SERVER
 # =========================================================
 
 class HealthHandler(BaseHTTPRequestHandler):
@@ -164,160 +169,6 @@ init_db()
 
 
 # =========================================================
-# LOAD QUESTION BANK
-# =========================================================
-
-def load_question_bank():
-
-    path = "question_bank.json"
-
-    if not os.path.exists(path):
-
-        print(
-            "WARNING: question_bank.json not found"
-        )
-
-        return
-
-    try:
-
-        with open(
-            path,
-            "r",
-            encoding="utf-8"
-        ) as f:
-
-            bank = json.load(f)
-
-    except Exception as e:
-
-        print(
-            "Question bank error:",
-            e
-        )
-
-        return
-
-    conn = get_db()
-
-    cur = conn.cursor()
-
-    inserted = 0
-
-    for q in bank:
-
-        try:
-
-            cur.execute("""
-                INSERT OR IGNORE INTO questions
-                (
-                    exam,
-                    subject,
-                    topic,
-                    question,
-                    options,
-                    answer,
-                    explanation,
-                    kind,
-                    verified,
-                    source
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-
-                q.get(
-                    "exam",
-                    EXAM_NAME
-                ),
-
-                q.get(
-                    "subject",
-                    ""
-                ),
-
-                q.get(
-                    "topic",
-                    ""
-                ),
-
-                q.get(
-                    "question",
-                    ""
-                ),
-
-                json.dumps(
-                    q.get(
-                        "options",
-                        []
-                    ),
-                    ensure_ascii=False
-                ),
-
-                int(
-                    q.get(
-                        "answer",
-                        0
-                    )
-                ),
-
-                q.get(
-                    "explanation",
-                    ""
-                ),
-
-                q.get(
-                    "kind",
-                    "Practice"
-                ),
-
-                int(
-                    q.get(
-                        "verified",
-                        0
-                    )
-                ),
-
-                q.get(
-                    "source",
-                    "Original Practice Question"
-                )
-            ))
-
-            if cur.rowcount:
-                inserted += 1
-
-        except Exception as e:
-
-            print(
-                "Question insert error:",
-                e
-            )
-
-    conn.commit()
-
-    cur.execute("""
-        SELECT COUNT(*)
-        FROM questions
-        WHERE exam = ?
-    """, (EXAM_NAME,))
-
-    total = cur.fetchone()[0]
-
-    print(
-        f"{EXAM_NAME} Question Bank: {total}"
-    )
-
-    print(
-        f"New questions: {inserted}"
-    )
-
-    conn.close()
-
-
-load_question_bank()
-
-
-# =========================================================
 # USER
 # =========================================================
 
@@ -350,21 +201,550 @@ def save_user(user):
             )
         )
     """, (
-
         user.id,
-
         user.first_name or "",
-
         user.username or "",
-
         user.id,
-
         int(time.time())
     ))
 
     conn.commit()
+    conn.close()
+
+
+# =========================================================
+# QUESTION BANK - JSON LOADER
+# =========================================================
+
+def load_question_bank():
+
+    path = "question_bank.json"
+
+    if not os.path.exists(path):
+
+        print(
+            "question_bank.json not found"
+        )
+
+        return
+
+    try:
+
+        with open(
+            path,
+            "r",
+            encoding="utf-8"
+        ) as f:
+
+            bank = json.load(f)
+
+    except Exception as e:
+
+        print(
+            "JSON ERROR:",
+            e
+        )
+
+        return
+
+    if not isinstance(bank, list):
+
+        print(
+            "question_bank.json must contain a list"
+        )
+
+        return
+
+    conn = get_db()
+
+    cur = conn.cursor()
+
+    inserted = 0
+
+    for q in bank:
+
+        try:
+
+            question = str(
+                q.get("question", "")
+            ).strip()
+
+            options = q.get(
+                "options",
+                []
+            )
+
+            answer = int(
+                q.get(
+                    "answer",
+                    0
+                )
+            )
+
+            if not question:
+                continue
+
+            if not isinstance(
+                options,
+                list
+            ):
+                continue
+
+            if len(options) < 2:
+                continue
+
+            if answer < 0 or answer >= len(options):
+                continue
+
+            cur.execute("""
+                INSERT OR IGNORE INTO questions
+                (
+                    exam,
+                    subject,
+                    topic,
+                    question,
+                    options,
+                    answer,
+                    explanation,
+                    kind,
+                    verified,
+                    source
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+
+                q.get(
+                    "exam",
+                    EXAM_NAME
+                ),
+
+                q.get(
+                    "subject",
+                    "General"
+                ),
+
+                q.get(
+                    "topic",
+                    ""
+                ),
+
+                question,
+
+                json.dumps(
+                    options,
+                    ensure_ascii=False
+                ),
+
+                answer,
+
+                q.get(
+                    "explanation",
+                    ""
+                ),
+
+                q.get(
+                    "kind",
+                    "Practice"
+                ),
+
+                int(
+                    q.get(
+                        "verified",
+                        0
+                    )
+                ),
+
+                q.get(
+                    "source",
+                    "Admin"
+                )
+            ))
+
+            if cur.rowcount:
+                inserted += 1
+
+        except Exception as e:
+
+            print(
+                "Question insert error:",
+                e
+            )
+
+    conn.commit()
+
+    cur.execute("""
+        SELECT COUNT(*)
+        FROM questions
+        WHERE exam = ?
+    """, (EXAM_NAME,))
+
+    total = cur.fetchone()[0]
 
     conn.close()
+
+    print(
+        f"{EXAM_NAME}: {total} questions"
+    )
+
+    print(
+        f"New questions: {inserted}"
+    )
+
+
+load_question_bank()
+
+
+# =========================================================
+# ADMIN CHECK
+# =========================================================
+
+def is_admin(user_id):
+
+    return (
+        ADMIN_ID != 0
+        and user_id == ADMIN_ID
+    )
+
+
+# =========================================================
+# PARSE ADMIN QUESTIONS
+# =========================================================
+
+def parse_questions(text):
+
+    text = text.strip()
+
+    pattern = re.compile(
+        r"""
+        Q(?:uestion)?\.?\s*
+        (?P<question>.*?)
+
+        \s*
+        A[\)\.\:]\s*
+        (?P<a>.*?)
+
+        \s*
+        B[\)\.\:]\s*
+        (?P<b>.*?)
+
+        \s*
+        C[\)\.\:]\s*
+        (?P<c>.*?)
+
+        \s*
+        D[\)\.\:]\s*
+        (?P<d>.*?)
+
+        \s*
+        Answer\s*[:\-]\s*
+        (?P<answer>[ABCD])
+
+        (?:\s*
+        Explanation\s*[:\-]\s*
+        (?P<explanation>.*?))?
+
+        (?=
+            \n\s*
+            Q(?:uestion)?\.?\s*
+            |
+            $
+        )
+        """,
+        re.IGNORECASE |
+        re.DOTALL |
+        re.VERBOSE
+    )
+
+    matches = list(
+        pattern.finditer(text)
+    )
+
+    results = []
+
+    for match in matches:
+
+        question = (
+            match.group(
+                "question"
+            )
+            .strip()
+        )
+
+        options = [
+
+            match.group("a").strip(),
+
+            match.group("b").strip(),
+
+            match.group("c").strip(),
+
+            match.group("d").strip()
+
+        ]
+
+        answer_letter = (
+            match.group(
+                "answer"
+            )
+            .upper()
+        )
+
+        answer = (
+            ord(answer_letter)
+            - ord("A")
+        )
+
+        explanation = (
+            match.group(
+                "explanation"
+            )
+            or ""
+        ).strip()
+
+        if question:
+
+            results.append({
+
+                "question": question,
+
+                "options": options,
+
+                "answer": answer,
+
+                "explanation": explanation
+
+            })
+
+    return results
+
+
+# =========================================================
+# SAVE ADMIN QUESTIONS
+# =========================================================
+
+def save_uploaded_questions(
+    questions
+):
+
+    conn = get_db()
+
+    cur = conn.cursor()
+
+    inserted = 0
+
+    duplicate = 0
+
+    for q in questions:
+
+        try:
+
+            cur.execute("""
+                INSERT OR IGNORE INTO questions
+                (
+                    exam,
+                    subject,
+                    topic,
+                    question,
+                    options,
+                    answer,
+                    explanation,
+                    kind,
+                    verified,
+                    source
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+
+                EXAM_NAME,
+
+                "General",
+
+                "",
+
+                q["question"],
+
+                json.dumps(
+                    q["options"],
+                    ensure_ascii=False
+                ),
+
+                q["answer"],
+
+                q["explanation"],
+
+                "Admin Uploaded",
+
+                1,
+
+                "Admin"
+
+            ))
+
+            if cur.rowcount:
+
+                inserted += 1
+
+            else:
+
+                duplicate += 1
+
+        except Exception as e:
+
+            print(
+                "SAVE ERROR:",
+                e
+            )
+
+    conn.commit()
+
+    cur.execute("""
+        SELECT COUNT(*)
+        FROM questions
+        WHERE exam = ?
+    """, (EXAM_NAME,))
+
+    total = cur.fetchone()[0]
+
+    conn.close()
+
+    return (
+        inserted,
+        duplicate,
+        total
+    )
+
+
+# =========================================================
+# ADMIN COMMANDS
+# =========================================================
+
+async def questions_command(
+    update,
+    context
+):
+
+    if not is_admin(
+        update.effective_user.id
+    ):
+
+        return
+
+    conn = get_db()
+
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT COUNT(*)
+        FROM questions
+        WHERE exam = ?
+    """, (EXAM_NAME,))
+
+    total = cur.fetchone()[0]
+
+    conn.close()
+
+    await update.message.reply_text(
+        f"📚 {EXAM_NAME}\n\n"
+        f"Total Questions: {total}\n\n"
+        f"Mock के लिए minimum: "
+        f"{TOTAL_QUESTIONS}"
+    )
+
+
+async def clear_questions_command(
+    update,
+    context
+):
+
+    if not is_admin(
+        update.effective_user.id
+    ):
+
+        return
+
+    conn = get_db()
+
+    conn.execute("""
+        DELETE FROM questions
+        WHERE exam = ?
+    """, (EXAM_NAME,))
+
+    conn.commit()
+    conn.close()
+
+    await update.message.reply_text(
+        "🗑️ UPSSSC PET question bank साफ कर दिया गया।"
+    )
+
+
+# =========================================================
+# ADMIN QUESTION MESSAGE
+# =========================================================
+
+async def admin_question_message(
+    update,
+    context
+):
+
+    user = update.effective_user
+
+    if not user:
+        return
+
+    if not is_admin(
+        user.id
+    ):
+
+        return
+
+    text = update.message.text or ""
+
+    questions = parse_questions(
+        text
+    )
+
+    if not questions:
+
+        await update.message.reply_text(
+            """
+❌ Question format समझ नहीं आया।
+
+इस format में भेजें:
+
+Q. भारत का संविधान कब लागू हुआ?
+A) 15 अगस्त 1947
+B) 26 जनवरी 1950
+C) 26 नवंबर 1949
+D) 2 अक्टूबर 1950
+Answer: B
+Explanation: संविधान 26 जनवरी 1950 को लागू हुआ।
+"""
+        )
+
+        return
+
+    inserted, duplicate, total = (
+        save_uploaded_questions(
+            questions
+        )
+    )
+
+    await update.message.reply_text(
+
+        f"""
+✅ QUESTIONS ADDED
+
+📥 Received: {len(questions)}
+
+➕ New Added: {inserted}
+
+♻️ Duplicate: {duplicate}
+
+📚 Total Question Bank: {total}
+
+🎯 Mock में random 25 questions आएंगे।
+"""
+    )
 
 
 # =========================================================
@@ -377,7 +757,7 @@ def home_keyboard():
 
         [
             InlineKeyboardButton(
-                "🚀 Start PET Mock Test",
+                "🚀 Start PET Mock",
                 callback_data="start_test"
             )
         ],
@@ -393,8 +773,8 @@ def home_keyboard():
 
 
 async def start(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
+    update,
+    context
 ):
 
     save_user(
@@ -403,27 +783,23 @@ async def start(
 
     context.user_data.clear()
 
-    text = """
-🎯 UPSSSC PET TEST
+    await update.message.reply_text(
+
+        """
+🎯 <b>UPSSSC PET TEST</b>
 
 📝 25 Questions
 ⏱️ 20 Minutes
-🎯 1 Mark per Correct Answer
-❌ Negative Marking: 0.25
+🎯 +1 Correct
+❌ -0.25 Wrong
 
-📚 Test 2 Sections में होगा:
+📚 Test 2 sections में होगा।
 
-SECTION 1
-Q1 – Q13
+👇 नीचे से test शुरू करें।
+""",
 
-SECTION 2
-Q14 – Q25
+        parse_mode="HTML",
 
-👇 Test शुरू करें
-"""
-
-    await update.message.reply_text(
-        text,
         reply_markup=home_keyboard()
     )
 
@@ -454,6 +830,7 @@ def create_test():
     conn.close()
 
     if len(rows) < TOTAL_QUESTIONS:
+
         return None
 
     return [
@@ -473,6 +850,7 @@ def remaining_time(context):
     )
 
     if not deadline:
+
         return TOTAL_TIME
 
     return max(
@@ -496,22 +874,45 @@ async def start_test(
 
     if not questions:
 
+        conn = get_db()
+
+        cur = conn.cursor()
+
+        cur.execute("""
+            SELECT COUNT(*)
+            FROM questions
+            WHERE exam = ?
+        """, (EXAM_NAME,))
+
+        count = cur.fetchone()[0]
+
+        conn.close()
+
         await query.edit_message_text(
-            """
-❌ Test अभी शुरू नहीं हो सकता।
 
-Question Bank में कम से कम
-25 questions होने चाहिए।
+            f"""
+❌ <b>TEST START नहीं हो सकता</b>
 
-अभी 25 questions उपलब्ध नहीं हैं।
+Question Bank में अभी:
+<b>{count}</b> questions हैं।
+
+कम से कम:
+<b>{TOTAL_QUESTIONS}</b> questions चाहिए।
+
+Admin को और questions भेजने होंगे।
 """,
+
+            parse_mode="HTML",
+
             reply_markup=InlineKeyboardMarkup([
+
                 [
                     InlineKeyboardButton(
                         "🏠 Home",
                         callback_data="home"
                     )
                 ]
+
             ])
         )
 
@@ -525,6 +926,8 @@ Question Bank में कम से कम
 
     context.user_data["finished"] = False
 
+    context.user_data["current_section"] = 1
+
     context.user_data["start_time"] = time.time()
 
     context.user_data["deadline"] = (
@@ -533,7 +936,7 @@ Question Bank में कम से कम
     )
 
     await query.answer(
-        "🚀 Test शुरू हो गया!"
+        "🚀 Test शुरू!"
     )
 
     await send_section(
@@ -544,7 +947,7 @@ Question Bank में कम से कम
 
 
 # =========================================================
-# BUILD QUESTION TEXT
+# BUILD QUESTION
 # =========================================================
 
 def build_question_text(
@@ -561,13 +964,14 @@ def build_question_text(
         number
     )
 
-    text = f"""
+    text = (
+        f"\n<b>Q{number}. "
+        f"{q['question']}</b>\n\n"
+    )
 
-<b>Q{number}. {q["question"]}</b>
-
-"""
-
-    for i, option in enumerate(options):
+    for i, option in enumerate(
+        options
+    ):
 
         if selected == i:
 
@@ -585,7 +989,7 @@ def build_question_text(
 
 
 # =========================================================
-# SECTION MESSAGE
+# SEND SECTION
 # =========================================================
 
 async def send_section(
@@ -593,6 +997,10 @@ async def send_section(
     context,
     section
 ):
+
+    context.user_data[
+        "current_section"
+    ] = section
 
     questions = context.user_data[
         "questions"
@@ -624,11 +1032,10 @@ async def send_section(
     seconds = remaining % 60
 
     text = (
-        f"📝 <b>{EXAM_NAME} MOCK TEST</b>\n\n"
-        f"{title}\n"
-        f"Questions {start}–{end}\n\n"
-        f"⏱️ Time Left: "
-        f"{minutes:02d}:{seconds:02d}\n"
+        f"📝 <b>UPSSSC PET MOCK</b>\n\n"
+        f"<b>{title}</b>\n"
+        f"Q{start} – Q{end}\n\n"
+        f"⏱️ {minutes:02d}:{seconds:02d}\n"
         f"━━━━━━━━━━━━━━━━━━\n"
     )
 
@@ -655,37 +1062,37 @@ async def send_section(
 
         row = []
 
-        for i, option in enumerate(options):
+        for i, option in enumerate(
+            options
+        ):
 
-            selected = (
-                answers.get(number) == i
-            )
-
-            if selected:
+            if answers.get(number) == i:
 
                 label = f"🔘 {option}"
 
             else:
 
-                label = f"{option}"
+                label = option
 
             row.append(
+
                 InlineKeyboardButton(
                     label,
-                    callback_data=f"a:{number}:{i}"
+                    callback_data=(
+                        f"a:{number}:{i}"
+                    )
                 )
+
             )
 
         keyboard.append(row)
-
-    # SECTION SWITCH
 
     if section == 1:
 
         keyboard.append([
 
             InlineKeyboardButton(
-                "➡️ Section 2",
+                "➡️ SECTION 2",
                 callback_data="section:2"
             )
 
@@ -696,7 +1103,7 @@ async def send_section(
         keyboard.append([
 
             InlineKeyboardButton(
-                "⬅️ Section 1",
+                "⬅️ SECTION 1",
                 callback_data="section:1"
             )
 
@@ -711,22 +1118,23 @@ async def send_section(
 
     ])
 
-    markup = InlineKeyboardMarkup(
-        keyboard
-    )
-
     try:
 
         await query.edit_message_text(
+
             text,
+
             parse_mode="HTML",
-            reply_markup=markup
+
+            reply_markup=InlineKeyboardMarkup(
+                keyboard
+            )
         )
 
     except Exception as e:
 
         print(
-            "send_section error:",
+            "SEND SECTION ERROR:",
             e
         )
 
@@ -755,7 +1163,7 @@ async def answer_click(
     if remaining_time(context) <= 0:
 
         await query.answer(
-            "⏰ Time समाप्त हो गया!",
+            "⏰ Time समाप्त!",
             show_alert=True
         )
 
@@ -768,15 +1176,21 @@ async def answer_click(
 
     data = query.data.split(":")
 
-    number = int(data[1])
+    number = int(
+        data[1]
+    )
 
-    option = int(data[2])
+    option = int(
+        data[2]
+    )
 
     questions = context.user_data[
         "questions"
     ]
 
-    q = questions[number - 1]
+    q = questions[
+        number - 1
+    ]
 
     correct_answer = int(
         q["answer"]
@@ -786,15 +1200,9 @@ async def answer_click(
         "answers"
     ]
 
-    # -----------------------------------------------------
-    # CHANGE ANSWER
-    # -----------------------------------------------------
-
-    answers[number] = option
-
-    # -----------------------------------------------------
-    # CORRECT
-    # -----------------------------------------------------
+    answers[
+        number
+    ] = option
 
     if option == correct_answer:
 
@@ -802,10 +1210,6 @@ async def answer_click(
             "🎉 सही उत्तर! 🎈🎈🎈",
             show_alert=True
         )
-
-    # -----------------------------------------------------
-    # WRONG
-    # -----------------------------------------------------
 
     else:
 
@@ -818,20 +1222,18 @@ async def answer_click(
         ]
 
         await query.answer(
+
             f"❌ गलत!\n\n"
-            f"✅ सही उत्तर: {correct_text}",
+            f"✅ सही: {correct_text}",
+
             show_alert=True
         )
 
-    # Find current section
-
-    if number <= SECTION_1_COUNT:
-
-        section = 1
-
-    else:
-
-        section = 2
+    section = (
+        1
+        if number <= SECTION_1_COUNT
+        else 2
+    )
 
     await send_section(
         query,
@@ -841,7 +1243,7 @@ async def answer_click(
 
 
 # =========================================================
-# SECTION BUTTON
+# SECTION
 # =========================================================
 
 async def section_click(
@@ -854,11 +1256,6 @@ async def section_click(
     )
 
     if remaining_time(context) <= 0:
-
-        await query.answer(
-            "⏰ Time समाप्त हो गया!",
-            show_alert=True
-        )
 
         await finish_test(
             query,
@@ -877,7 +1274,7 @@ async def section_click(
 
 
 # =========================================================
-# SUBMIT CONFIRMATION
+# SUBMIT
 # =========================================================
 
 async def submit_confirm(
@@ -909,15 +1306,17 @@ async def submit_confirm(
     keyboard = InlineKeyboardMarkup([
 
         [
+
             InlineKeyboardButton(
-                "✅ Yes, Submit",
+                "✅ SUBMIT",
                 callback_data="submit_yes"
             ),
 
             InlineKeyboardButton(
-                "❌ Cancel",
+                "❌ CANCEL",
                 callback_data="submit_cancel"
             )
+
         ]
 
     ])
@@ -927,8 +1326,9 @@ async def submit_confirm(
         f"""
 🏁 <b>SUBMIT TEST?</b>
 
-Attempted: {attempted}
-Skipped: {skipped}
+📝 Attempted: {attempted}
+
+⏭️ Skipped: {skipped}
 
 क्या आप test submit करना चाहते हैं?
 """,
@@ -939,30 +1339,24 @@ Skipped: {skipped}
     )
 
 
-# =========================================================
-# SUBMIT CANCEL
-# =========================================================
-
 async def submit_cancel(
     query,
     context
 ):
 
-    await query.answer(
-        "Test जारी है."
-    )
-
-    # Determine current section
-
-    current = context.user_data.get(
+    section = context.user_data.get(
         "current_section",
         1
+    )
+
+    await query.answer(
+        "Test जारी है."
     )
 
     await send_section(
         query,
         context,
-        current
+        section
     )
 
 
@@ -1023,17 +1417,22 @@ async def finish_test(
 
             wrong += 1
 
-    attempted = correct + wrong
+    attempted = (
+        correct
+        + wrong
+    )
 
     score = (
-        correct * MARKS_CORRECT
+        correct
+        * MARKS_CORRECT
     ) - (
-        wrong * NEGATIVE_MARK
+        wrong
+        * NEGATIVE_MARK
     )
 
     accuracy = 0
 
-    if attempted > 0:
+    if attempted:
 
         accuracy = (
             correct
@@ -1099,21 +1498,21 @@ async def finish_test(
 
     conn.commit()
 
-    attempt_id = cur.lastrowid
-
     conn.close()
 
     minutes = total_time // 60
     seconds = total_time % 60
 
-    text = f"""
+    await query.edit_message_text(
+
+        f"""
 🏆 <b>TEST RESULT</b>
 
 <b>{EXAM_NAME}</b>
 
 ━━━━━━━━━━━━━━━━━━
 
-📊 Total Questions: {TOTAL_QUESTIONS}
+📊 Total: {TOTAL_QUESTIONS}
 
 📝 Attempted: {attempted}
 
@@ -1133,38 +1532,35 @@ async def finish_test(
 
 ━━━━━━━━━━━━━━━━━━
 
-अच्छा प्रयास! 🔥
-"""
+🔥 Test completed!
+""",
 
-    keyboard = InlineKeyboardMarkup([
-
-        [
-            InlineKeyboardButton(
-                "🏆 Ranking",
-                callback_data="ranking"
-            )
-        ],
-
-        [
-            InlineKeyboardButton(
-                "🔄 New Test",
-                callback_data="start_test"
-            )
-        ],
-
-        [
-            InlineKeyboardButton(
-                "🏠 Home",
-                callback_data="home"
-            )
-        ]
-
-    ])
-
-    await query.edit_message_text(
-        text,
         parse_mode="HTML",
-        reply_markup=keyboard
+
+        reply_markup=InlineKeyboardMarkup([
+
+            [
+                InlineKeyboardButton(
+                    "🏆 Ranking",
+                    callback_data="ranking"
+                )
+            ],
+
+            [
+                InlineKeyboardButton(
+                    "🔄 New Test",
+                    callback_data="start_test"
+                )
+            ],
+
+            [
+                InlineKeyboardButton(
+                    "🏠 Home",
+                    callback_data="home"
+                )
+            ]
+
+        ])
     )
 
 
@@ -1183,13 +1579,17 @@ async def ranking(
 
     cur.execute("""
         SELECT
-            user_id,
-            MAX(score) AS best_score,
-            MAX(accuracy) AS best_accuracy,
-            MIN(total_time) AS fastest
-        FROM attempts
-        WHERE exam = ?
-        GROUP BY user_id
+            a.user_id,
+            u.first_name,
+            u.username,
+            MAX(a.score) AS best_score,
+            MAX(a.accuracy) AS best_accuracy,
+            MIN(a.total_time) AS fastest
+        FROM attempts a
+        LEFT JOIN users u
+        ON a.user_id = u.user_id
+        WHERE a.exam = ?
+        GROUP BY a.user_id
         ORDER BY
             best_score DESC,
             best_accuracy DESC,
@@ -1209,23 +1609,22 @@ async def ranking(
 
     conn.close()
 
-    text = """
-🏆 <b>UPSSSC PET RANKING</b>
+    text = (
+        "🏆 <b>UPSSSC PET RANKING</b>\n\n"
+        "━━━━━━━━━━━━━━━━━━\n"
+    )
 
-━━━━━━━━━━━━━━━━━━
-"""
+    medals = [
+        "🥇",
+        "🥈",
+        "🥉"
+    ]
 
     if not rows:
 
-        text += "\nअभी कोई attempt नहीं है."
+        text += "\nअभी कोई attempt नहीं है।"
 
     else:
-
-        medals = [
-            "🥇",
-            "🥈",
-            "🥉"
-        ]
 
         for i, row in enumerate(
             rows,
@@ -1238,32 +1637,40 @@ async def ranking(
                 else f"{i}."
             )
 
+            name = (
+                row["first_name"]
+                or row["username"]
+                or "User"
+            )
+
             text += (
                 f"\n{medal} "
-                f"<b>{row['best_score']:.2f}</b> "
-                f"marks"
+                f"<b>{name}</b>\n"
+                f"   🎯 {row['best_score']:.2f}"
+                f" marks\n"
             )
 
     text += (
-        f"\n\n👥 Total Attempts: "
+        f"\n👥 Total Attempts: "
         f"{total_attempts}"
     )
 
-    keyboard = InlineKeyboardMarkup([
-
-        [
-            InlineKeyboardButton(
-                "🏠 Home",
-                callback_data="home"
-            )
-        ]
-
-    ])
-
     await query.edit_message_text(
+
         text,
+
         parse_mode="HTML",
-        reply_markup=keyboard
+
+        reply_markup=InlineKeyboardMarkup([
+
+            [
+                InlineKeyboardButton(
+                    "🏠 Home",
+                    callback_data="home"
+                )
+            ]
+
+        ])
     )
 
 
@@ -1278,7 +1685,9 @@ async def home(
 
     context.user_data.clear()
 
-    text = """
+    await query.edit_message_text(
+
+        """
 🎯 <b>UPSSSC PET TEST</b>
 
 📝 25 Questions
@@ -1286,12 +1695,11 @@ async def home(
 🎯 +1 Correct
 ❌ -0.25 Wrong
 
-👇 नीचे से test शुरू करें।
-"""
+👇 Test शुरू करें।
+""",
 
-    await query.edit_message_text(
-        text,
         parse_mode="HTML",
+
         reply_markup=home_keyboard()
     )
 
@@ -1301,17 +1709,17 @@ async def home(
 # =========================================================
 
 async def callback_router(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
+    update,
+    context
 ):
 
     query = update.callback_query
 
-    await query.answer()
-
     data = query.data
 
     if data == "start_test":
+
+        await query.answer()
 
         await start_test(
             query,
@@ -1334,112 +1742,6 @@ async def callback_router(
 
     elif data == "submit":
 
-        await submit_confirm(
-            query,
-            context
-        )
+        await query.answer()
 
-    elif data == "submit_yes":
-
-        await finish_test(
-            query,
-            context
-        )
-
-    elif data == "submit_cancel":
-
-        await submit_cancel(
-            query,
-            context
-        )
-
-    elif data == "ranking":
-
-        await ranking(
-            query,
-            context
-        )
-
-    elif data == "home":
-
-        await home(
-            query,
-            context
-        )
-
-
-# =========================================================
-# ERROR HANDLER
-# =========================================================
-
-async def error_handler(
-    update,
-    context
-):
-
-    print(
-        "BOT ERROR:",
-        context.error
-    )
-
-
-# =========================================================
-# MAIN
-# =========================================================
-
-def main():
-
-    if not TOKEN:
-
-        raise RuntimeError(
-            "BOT_TOKEN environment variable missing."
-        )
-
-    app = (
-        Application
-        .builder()
-        .token(TOKEN)
-        .build()
-    )
-
-    app.add_handler(
-        CommandHandler(
-            "start",
-            start
-        )
-    )
-
-    app.add_handler(
-        CallbackQueryHandler(
-            callback_router
-        )
-    )
-
-    app.add_error_handler(
-        error_handler
-    )
-
-    print(
-        "================================"
-    )
-
-    print(
-        "UPSSSC PET TEST BOT STARTED"
-    )
-
-    print(
-        "25 Questions / 20 Minutes"
-    )
-
-    print(
-        "================================"
-    )
-
-    app.run_polling(
-        drop_pending_updates=True
-    )
-
-
-if __name__ == "__main__":
-
-    main()
+        await

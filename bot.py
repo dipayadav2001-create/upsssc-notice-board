@@ -3,15 +3,11 @@ import json
 import random
 import sqlite3
 import time
-import asyncio
 import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
 
-from telegram import (
-    Update,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-)
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -19,38 +15,28 @@ from telegram.ext import (
     ContextTypes,
 )
 
-
 # =========================================================
 # CONFIG
 # =========================================================
 
 TOKEN = os.getenv("BOT_TOKEN")
 
-if not TOKEN:
-    raise RuntimeError("BOT_TOKEN environment variable is missing")
+PORT = int(os.getenv("PORT", "10000"))
+DB_PATH = os.getenv("DB_PATH", "pet_mock.db")
 
-EXAM = "SSC CGL"
+TEST_NAME = "UPSSSC PET Mock Test"
 
-QUESTION_FILE = "question_bank.json"
+TOTAL_QUESTIONS = 25
+TEST_TIME = 20 * 60
 
-TOTAL_QUESTIONS = 100
-SECTION_SIZE = 25
-SECTION_TIME = 15 * 60
-TOTAL_TIME = 60 * 60
+MARKS_CORRECT = 2
+NEGATIVE_MARK = 0.50
 
-NEGATIVE_MARKS = 0.50
-CORRECT_MARKS = 2.0
-
-SECTIONS = [
-    ("Reasoning", "General Intelligence & Reasoning"),
-    ("General Awareness", "General Awareness"),
-    ("Maths", "Quantitative Aptitude"),
-    ("English", "English Comprehension"),
-]
+QUESTIONS_FILE = "question_bank.json"
 
 
 # =========================================================
-# RENDER HEALTH SERVER
+# HEALTH SERVER
 # =========================================================
 
 class HealthHandler(BaseHTTPRequestHandler):
@@ -59,22 +45,18 @@ class HealthHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "text/plain")
         self.end_headers()
-        self.wfile.write(b"EXAMPREP SSC CGL BOT LIVE")
+        self.wfile.write(b"UPSSSC PET MOCK BOT IS RUNNING")
 
     def log_message(self, format, *args):
-        return
+        pass
 
 
 def start_health_server():
 
-    port = int(os.environ.get("PORT", "10000"))
-
-    server = HTTPServer(
-        ("0.0.0.0", port),
+    server = ThreadingHTTPServer(
+        ("0.0.0.0", PORT),
         HealthHandler
     )
-
-    print(f"Health server running on port {port}")
 
     server.serve_forever()
 
@@ -89,33 +71,48 @@ threading.Thread(
 # DATABASE
 # =========================================================
 
-DB_FILE = "examprep.db"
-
-
 def get_db():
 
-    conn = sqlite3.connect(
-        DB_FILE,
-        check_same_thread=False
-    )
-
+    conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-
     return conn
 
 
 def init_db():
 
     conn = get_db()
-
     cur = conn.cursor()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS questions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            question TEXT UNIQUE,
+            options TEXT NOT NULL,
+            answer INTEGER NOT NULL,
+            explanation TEXT DEFAULT ''
+        )
+    """)
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
-            username TEXT,
             first_name TEXT,
-            created_at REAL
+            username TEXT,
+            created_at INTEGER
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS attempts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            score REAL,
+            correct INTEGER,
+            wrong INTEGER,
+            skipped INTEGER,
+            accuracy REAL,
+            time_taken INTEGER,
+            created_at INTEGER
         )
     """)
 
@@ -132,157 +129,180 @@ init_db()
 
 def load_questions():
 
-    if not os.path.exists(QUESTION_FILE):
-        raise FileNotFoundError(
-            f"{QUESTION_FILE} not found"
+    if not os.path.exists(QUESTIONS_FILE):
+
+        print(
+            "ERROR: question_bank.json not found."
         )
 
-    with open(
-        QUESTION_FILE,
-        "r",
-        encoding="utf-8"
-    ) as f:
+        return
 
-        data = json.load(f)
+    try:
+
+        with open(
+            QUESTIONS_FILE,
+            "r",
+            encoding="utf-8"
+        ) as f:
+
+            data = json.load(f)
+
+    except Exception as e:
+
+        print(
+            "JSON ERROR:",
+            e
+        )
+
+        return
 
     if not isinstance(data, list):
-        raise ValueError(
-            "question_bank.json must contain a JSON list"
+
+        print(
+            "ERROR: question_bank.json must contain a JSON array."
         )
 
-    valid = []
+        return
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    added = 0
 
     for q in data:
 
-        if not isinstance(q, dict):
-            continue
+        try:
 
-        required = [
-            "subject",
-            "question",
-            "options",
-            "answer",
-        ]
+            question = str(
+                q.get("question", "")
+            ).strip()
 
-        if not all(k in q for k in required):
-            continue
-
-        if q["subject"] not in [
-            "Reasoning",
-            "General Awareness",
-            "Maths",
-            "English",
-        ]:
-            continue
-
-        if not isinstance(q["options"], list):
-            continue
-
-        if len(q["options"]) != 4:
-            continue
-
-        if not isinstance(q["answer"], int):
-            continue
-
-        if not 0 <= q["answer"] <= 3:
-            continue
-
-        valid.append(q)
-
-    counts = {}
-
-    for q in valid:
-
-        subject = q["subject"]
-
-        counts[subject] = counts.get(
-            subject,
-            0
-        ) + 1
-
-    print("================================")
-    print("SSC CGL QUESTION BANK")
-    print("Total:", len(valid))
-
-    for subject, _ in SECTIONS:
-        print(
-            subject,
-            ":",
-            counts.get(subject, 0)
-        )
-
-    print("================================")
-
-    for subject, _ in SECTIONS:
-
-        if counts.get(subject, 0) < 25:
-
-            raise ValueError(
-                f"{subject} has only "
-                f"{counts.get(subject, 0)} questions. "
-                f"Need 25."
+            options = q.get(
+                "options",
+                []
             )
 
-    # exactly 25 from every section
-    final_questions = []
+            answer = int(
+                q.get(
+                    "answer",
+                    0
+                )
+            )
 
-    for subject, _ in SECTIONS:
+            explanation = q.get(
+                "explanation",
+                ""
+            )
 
-        pool = [
-            q for q in valid
-            if q["subject"] == subject
-        ]
+            if not question:
+                continue
 
-        random.shuffle(pool)
+            if not isinstance(options, list):
+                continue
 
-        final_questions.extend(
-            pool[:25]
-        )
+            if len(options) != 4:
+                continue
 
-    if len(final_questions) != 100:
+            if answer < 0 or answer > 3:
+                continue
 
-        raise ValueError(
-            "Unable to create 100 question mock."
-        )
+            cur.execute("""
+                INSERT OR IGNORE INTO questions
+                (
+                    question,
+                    options,
+                    answer,
+                    explanation
+                )
+                VALUES (?, ?, ?, ?)
+            """, (
+                question,
+                json.dumps(
+                    options,
+                    ensure_ascii=False
+                ),
+                answer,
+                explanation
+            ))
 
-    print("100-question SSC CGL mock ready.")
+            if cur.rowcount:
+                added += 1
 
-    return final_questions
+        except Exception as e:
+
+            print(
+                "Question error:",
+                e
+            )
+
+    conn.commit()
+
+    cur.execute(
+        "SELECT COUNT(*) FROM questions"
+    )
+
+    total = cur.fetchone()[0]
+
+    conn.close()
+
+    print(
+        f"Question bank: {total} questions"
+    )
+
+    print(
+        f"New questions added: {added}"
+    )
 
 
-QUESTIONS = load_questions()
+load_questions()
 
 
 # =========================================================
-# USER DATA
+# USER
 # =========================================================
 
-def register_user(update):
+def save_user(user):
 
-    user = update.effective_user
+    if not user:
+        return
 
     conn = get_db()
 
-    conn.execute(
-        """
-        INSERT OR IGNORE INTO users
-        (user_id, username, first_name, created_at)
-        VALUES (?, ?, ?, ?)
-        """,
+    conn.execute("""
+        INSERT OR REPLACE INTO users
         (
-            user.id,
-            user.username or "",
-            user.first_name or "",
-            time.time(),
+            user_id,
+            first_name,
+            username,
+            created_at
         )
-    )
+        VALUES (
+            ?,
+            ?,
+            ?,
+            COALESCE(
+                (
+                    SELECT created_at
+                    FROM users
+                    WHERE user_id = ?
+                ),
+                ?
+            )
+        )
+    """, (
+        user.id,
+        user.first_name or "",
+        user.username or "",
+        user.id,
+        int(time.time())
+    ))
 
     conn.commit()
     conn.close()
 
 
 # =========================================================
-# HOME
+# KEYBOARDS
 # =========================================================
 
 def home_keyboard():
@@ -291,947 +311,1093 @@ def home_keyboard():
 
         [
             InlineKeyboardButton(
-                "📝 Mock Test",
-                callback_data="mock"
+                "📝 Start Mock Test",
+                callback_data="start_test"
             )
         ],
 
         [
             InlineKeyboardButton(
-                "⚡ Quiz",
-                callback_data="quiz"
+                "🏆 Ranking",
+                callback_data="ranking"
             ),
 
             InlineKeyboardButton(
-                "📚 Practice",
-                callback_data="practice"
+                "📊 My Result",
+                callback_data="my_result"
             )
-        ],
-
-        [
-            InlineKeyboardButton(
-                "📜 PYQ",
-                callback_data="pyq"
-            ),
-
-            InlineKeyboardButton(
-                "📰 Current Affairs",
-                callback_data="current"
-            )
-        ],
-
-        [
-            InlineKeyboardButton(
-                "📊 My Performance",
-                callback_data="performance"
-            )
-        ],
-
-        [
-            InlineKeyboardButton(
-                "❌ Wrong Questions",
-                callback_data="wrong"
-            ),
-
-            InlineKeyboardButton(
-                "🔖 Saved Questions",
-                callback_data="saved"
-            )
-        ],
-
-        [
-            InlineKeyboardButton(
-                "🏆 Leaderboard",
-                callback_data="leaderboard"
-            ),
-
-            InlineKeyboardButton(
-                "👤 Profile",
-                callback_data="profile"
-            )
-        ],
-
-        [
-            InlineKeyboardButton(
-                "❓ Help",
-                callback_data="help"
-            )
-        ],
+        ]
 
     ])
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# =========================================================
+# START
+# =========================================================
 
-    register_user(update)
+async def start(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    save_user(
+        update.effective_user
+    )
 
     context.user_data.clear()
 
-    text = (
-        "🎯 <b>EXAMPREP</b>\n\n"
-        "Competitive Exam Practice Platform\n\n"
-        "👇 नीचे से अपना विकल्प चुनें:"
-    )
+    text = f"""
+🎯 {TEST_NAME}
+
+25 Questions
+⏱️ Time: 20 Minutes
+📝 2 Marks per correct answer
+❌ Negative Marking: 0.50
+
+पूरे 25 questions एक साथ मिलेंगे।
+
+Q1–Q13 पहले section में
+Q14–Q25 दूसरे section में
+
+कोई Next Question नहीं होगा।
+
+👇 Test शुरू करने के लिए नीचे button दबाएँ।
+"""
 
     await update.message.reply_text(
         text,
-        parse_mode="HTML",
         reply_markup=home_keyboard()
     )
 
 
 # =========================================================
-# MOCK INTRO
+# START TEST
 # =========================================================
 
-async def mock_intro(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
+async def start_test(
+    query,
+    context
 ):
 
-    query = update.callback_query
+    conn = get_db()
 
-    await query.answer()
+    cur = conn.cursor()
 
-    keyboard = InlineKeyboardMarkup([
+    cur.execute("""
+        SELECT *
+        FROM questions
+        ORDER BY RANDOM()
+        LIMIT ?
+    """, (
+        TOTAL_QUESTIONS,
+    ))
 
-        [
-            InlineKeyboardButton(
-                "🇮🇳 SSC CGL Tier-I",
-                callback_data="start_mock"
-            )
-        ],
+    rows = cur.fetchall()
 
-        [
-            InlineKeyboardButton(
-                "⬅️ Back",
-                callback_data="home"
-            )
-        ]
+    conn.close()
 
-    ])
+    if len(rows) < TOTAL_QUESTIONS:
 
-    text = (
-        "📝 <b>SSC CGL Tier-I</b>\n\n"
-
-        "📌 Total Questions: <b>100</b>\n"
-        "⏱ Total Time: <b>60 Minutes</b>\n"
-        "🎯 Marks: <b>200</b>\n"
-        "❌ Negative Marking: <b>0.50</b>\n\n"
-
-        "Sections:\n"
-        "🧠 Reasoning — 25\n"
-        "🌍 General Awareness — 25\n"
-        "➗ Quantitative Aptitude — 25\n"
-        "🔤 English Comprehension — 25\n\n"
-
-        "⚠️ प्रत्येक section के लिए 15 मिनट का timer होगा।"
-    )
-
-    await query.edit_message_text(
-        text,
-        parse_mode="HTML",
-        reply_markup=keyboard
-    )
-
-
-# =========================================================
-# CREATE MOCK
-# =========================================================
-
-async def start_mock(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
-    query = update.callback_query
-
-    await query.answer()
-
-    questions = QUESTIONS.copy()
-
-    # हर section को अलग रखकर क्रम बनाएं
-    ordered = []
-
-    for subject, _ in SECTIONS:
-
-        section_questions = [
-            q for q in questions
-            if q["subject"] == subject
-        ]
-
-        random.shuffle(section_questions)
-
-        ordered.extend(
-            section_questions[:25]
+        await query.edit_message_text(
+            "❌ Test अभी शुरू नहीं हो सकता।\n\n"
+            f"Database में कम से कम "
+            f"{TOTAL_QUESTIONS} questions चाहिए।\n\n"
+            f"अभी केवल {len(rows)} questions हैं।"
         )
 
-    context.user_data["mock"] = {
+        return
 
-        "questions": ordered,
+    questions = [
+        dict(row)
+        for row in rows
+    ]
 
-        "current": 0,
+    context.user_data.clear()
 
-        "answers": {},
+    context.user_data[
+        "test_questions"
+    ] = questions
 
-        "marked": set(),
+    context.user_data[
+        "answers"
+    ] = {}
 
-        "started_at": time.time(),
+    context.user_data[
+        "test_start"
+    ] = time.time()
 
-        "section_started": time.time(),
+    context.user_data[
+        "deadline"
+    ] = (
+        time.time()
+        + TEST_TIME
+    )
 
-        "finished": False,
+    context.user_data[
+        "finished"
+    ] = False
 
-    }
+    await query.edit_message_text(
+        "⏳ Test तैयार है...\n\n"
+        "25 questions नीचे दिए जाएंगे।"
+    )
 
-    await show_question(
+    await send_test(
         query,
         context
     )
 
 
 # =========================================================
-# SECTION HELPERS
+# TIMER
 # =========================================================
 
-def get_mock(context):
+def get_remaining(context):
 
-    return context.user_data.get("mock")
-
-
-def get_section(index):
-
-    return index // SECTION_SIZE
-
-
-def get_section_name(index):
-
-    section_index = get_section(index)
-
-    if section_index >= 4:
-        section_index = 3
-
-    return SECTIONS[section_index][1]
-
-
-def get_section_short(index):
-
-    section_index = get_section(index)
-
-    if section_index >= 4:
-        section_index = 3
-
-    return SECTIONS[section_index][0]
-
-
-def get_remaining_section_seconds(mock):
-
-    elapsed = int(
-        time.time() -
-        mock["section_started"]
+    deadline = context.user_data.get(
+        "deadline"
     )
+
+    if not deadline:
+        return TEST_TIME
 
     return max(
         0,
-        SECTION_TIME - elapsed
-    )
-
-
-def format_time(seconds):
-
-    seconds = max(0, int(seconds))
-
-    minutes = seconds // 60
-    secs = seconds % 60
-
-    return f"{minutes:02d}:{secs:02d}"
-
-
-# =========================================================
-# QUESTION TEXT
-# =========================================================
-
-def question_text(
-    q,
-    number,
-    mock
-):
-
-    answered = len(
-        mock["answers"]
-    )
-
-    remaining = (
-        TOTAL_QUESTIONS -
-        answered
-    )
-
-    section_name = get_section_name(
-        number - 1
-    )
-
-    section_number = (
-        get_section(number - 1) + 1
-    )
-
-    section_time = format_time(
-        get_remaining_section_seconds(
-            mock
+        int(
+            deadline - time.time()
         )
     )
 
-    total_elapsed = int(
-        time.time() -
-        mock["started_at"]
-    )
-
-    total_remaining = format_time(
-        max(
-            0,
-            TOTAL_TIME -
-            total_elapsed
-        )
-    )
-
-    return (
-        f"📝 <b>SSC CGL Tier-I</b>  |  "
-        f"<b>Mock Test</b>\n\n"
-
-        f"<b>Question {number} / 100</b>     "
-        f"⏱ <b>{section_time}</b>\n"
-
-        f"━━━━━━━━━━━━━━━━━━━━\n"
-
-        f"📚 Section {section_number}/4\n"
-        f"<b>{section_name}</b>\n\n"
-
-        f"⏳ Total Time: {total_remaining}\n"
-        f"✅ Attempted: {answered}   "
-        f"📌 Remaining: {remaining}\n\n"
-
-        f"<b>{q['question']}</b>"
-    )
-
 
 # =========================================================
-# QUESTION BUTTONS
+# SEND TEST
 # =========================================================
 
-def answer_keyboard(
-    q,
-    selected
-):
-
-    rows = []
-
-    labels = [
-        "A",
-        "B",
-        "C",
-        "D",
-    ]
-
-    for i in range(4):
-
-        prefix = "🔵"
-
-        if selected == i:
-            prefix = "✅"
-
-        text = (
-            f"{prefix} {labels[i]}. "
-            f"{q['options'][i]}"
-        )
-
-        rows.append([
-            InlineKeyboardButton(
-                text,
-                callback_data=f"ans:{i}"
-            )
-        ])
-
-    return rows
-
-
-# =========================================================
-# MAIN MOCK UI
-# =========================================================
-
-async def show_question(
+async def send_test(
     query,
     context
 ):
 
-    mock = get_mock(context)
-
-    if not mock:
-        return
-
-    if mock["finished"]:
-        return
-
-    current = mock["current"]
-
-    # Section auto transition
-    if current > 0:
-
-        current_section = get_section(
-            current
-        )
-
-        previous_section = get_section(
-            current - 1
-        )
-
-        if current_section != previous_section:
-
-            mock["section_started"] = time.time()
-
-    # section timeout
-    remaining_section = (
-        get_remaining_section_seconds(
-            mock
-        )
+    questions = context.user_data.get(
+        "test_questions"
     )
 
-    if remaining_section <= 0:
+    if not questions:
+        return
 
-        next_index = (
-            ((current // 25) + 1)
-            * 25
+    remaining = get_remaining(
+        context
+    )
+
+    minutes = remaining // 60
+    seconds = remaining % 60
+
+    answers = context.user_data.get(
+        "answers",
+        {}
+    )
+
+    # -----------------------------------------------------
+    # SECTION 1
+    # -----------------------------------------------------
+
+    text1 = f"""
+📝 {TEST_NAME}
+
+⏱️ Time Left: {minutes:02d}:{seconds:02d}
+
+━━━━━━━━━━━━━━━━━━
+📄 SECTION 1
+Questions 1–13
+━━━━━━━━━━━━━━━━━━
+
+"""
+
+    for i in range(13):
+
+        q = questions[i]
+
+        selected = answers.get(
+            str(i)
         )
 
-        if next_index >= 100:
+        text1 += (
+            f"\nQ{i + 1}. "
+            f"{q['question']}\n"
+        )
 
-            await finish_mock(
-                query,
-                context
+        options = json.loads(
+            q["options"]
+        )
+
+        for j, option in enumerate(options):
+
+            mark = "○"
+
+            if selected == j:
+                mark = "🔘"
+
+            text1 += (
+                f"{mark} {option}\n"
             )
 
-            return
+    buttons1 = []
 
-        mock["current"] = next_index
-        mock["section_started"] = time.time()
+    for i in range(13):
 
-        current = next_index
+        row = []
 
-    # total timeout
-    total_elapsed = (
-        time.time() -
-        mock["started_at"]
-    )
+        for j in range(4):
 
-    if total_elapsed >= TOTAL_TIME:
+            selected = (
+                answers.get(str(i))
+                == j
+            )
 
-        await finish_mock(
-            query,
-            context
-        )
+            prefix = "🔘" if selected else "○"
 
-        return
+            row.append(
+                InlineKeyboardButton(
+                    prefix,
+                    callback_data=f"a:{i}:{j}"
+                )
+            )
 
-    q = mock["questions"][current]
+        buttons1.append(row)
 
-    selected = mock["answers"].get(
-        current
-    )
-
-    text = question_text(
-        q,
-        current + 1,
-        mock
-    )
-
-    rows = answer_keyboard(
-        q,
-        selected
-    )
-
-    # Navigation
-    previous_button = InlineKeyboardButton(
-        "⬅️ Previous",
-        callback_data="previous"
-    )
-
-    next_button = InlineKeyboardButton(
-        "Save & Next ➡️",
-        callback_data="next"
-    )
-
-    mark_text = (
-        "🔖 Unmark"
-        if current in mock["marked"]
-        else "🔖 Mark"
-    )
-
-    mark_button = InlineKeyboardButton(
-        mark_text,
-        callback_data="mark"
-    )
-
-    rows.append([
-        previous_button,
-        next_button,
-        mark_button
-    ])
-
-    # Question palette button
-    rows.append([
-        InlineKeyboardButton(
-            "☷  Questions",
-            callback_data="palette"
-        )
-    ])
-
-    rows.append([
-        InlineKeyboardButton(
-            "🏁 Submit Test",
-            callback_data="submit_confirm"
-        )
-    ])
-
-    keyboard = InlineKeyboardMarkup(
-        rows
+    markup1 = InlineKeyboardMarkup(
+        buttons1
     )
 
     try:
 
-        await query.edit_message_text(
-            text,
-            parse_mode="HTML",
-            reply_markup=keyboard
+        await query.message.reply_text(
+            text1,
+            reply_markup=markup1
         )
 
     except Exception as e:
 
         print(
-            "show_question error:",
+            "Section 1 error:",
+            e
+        )
+
+    # -----------------------------------------------------
+    # SECTION 2
+    # -----------------------------------------------------
+
+    text2 = f"""
+━━━━━━━━━━━━━━━━━━
+📄 SECTION 2
+Questions 14–25
+━━━━━━━━━━━━━━━━━━
+
+"""
+
+    for i in range(13, 25):
+
+        q = questions[i]
+
+        selected = answers.get(
+            str(i)
+        )
+
+        text2 += (
+            f"\nQ{i + 1}. "
+            f"{q['question']}\n"
+        )
+
+        options = json.loads(
+            q["options"]
+        )
+
+        for j, option in enumerate(options):
+
+            mark = "○"
+
+            if selected == j:
+                mark = "🔘"
+
+            text2 += (
+                f"{mark} {option}\n"
+            )
+
+    buttons2 = []
+
+    for i in range(13, 25):
+
+        row = []
+
+        for j in range(4):
+
+            selected = (
+                answers.get(str(i))
+                == j
+            )
+
+            prefix = "🔘" if selected else "○"
+
+            row.append(
+                InlineKeyboardButton(
+                    prefix,
+                    callback_data=f"a:{i}:{j}"
+                )
+            )
+
+        buttons2.append(row)
+
+    buttons2.append([
+
+        InlineKeyboardButton(
+            "🏁 SUBMIT TEST",
+            callback_data="submit"
+        )
+
+    ])
+
+    markup2 = InlineKeyboardMarkup(
+        buttons2
+    )
+
+    try:
+
+        await query.message.reply_text(
+            text2,
+            reply_markup=markup2
+        )
+
+    except Exception as e:
+
+        print(
+            "Section 2 error:",
             e
         )
 
 
 # =========================================================
-# ANSWER
+# ANSWER CLICK
 # =========================================================
 
-async def answer_question(
+async def answer_click(
     query,
-    context
+    context,
+    question_index,
+    option_index
 ):
 
-    mock = get_mock(context)
+    if context.user_data.get(
+        "finished",
+        False
+    ):
 
-    if not mock:
-        return
-
-    try:
-
-        option = int(
-            query.data.split(":")[1]
+        await query.answer(
+            "Test already submitted."
         )
 
-    except:
-
         return
 
-    current = mock["current"]
+    if get_remaining(context) <= 0:
 
-    mock["answers"][current] = option
+        await query.answer(
+            "⏰ Time समाप्त हो गया।"
+        )
 
-    await query.answer(
-        "उत्तर save हो गया ✅"
-    )
-
-    await show_question(
-        query,
-        context
-    )
-
-
-# =========================================================
-# NEXT
-# =========================================================
-
-async def next_question(
-    query,
-    context
-):
-
-    mock = get_mock(context)
-
-    if not mock:
-        return
-
-    current = mock["current"]
-
-    if current >= 99:
-
-        await finish_mock(
+        await finish_test(
             query,
             context
         )
 
         return
 
-    next_index = current + 1
-
-    # Section changed
-    if get_section(next_index) != get_section(current):
-
-        mock["section_started"] = time.time()
-
-    mock["current"] = next_index
-
-    await query.answer()
-
-    await show_question(
-        query,
-        context
+    answers = context.user_data.setdefault(
+        "answers",
+        {}
     )
 
+    answers[
+        str(question_index)
+    ] = option_index
+
+    await query.answer(
+        "Answer saved ✓"
+    )
+
+    # Button state update
+    try:
+
+        await update_answer_buttons(
+            query,
+            context
+        )
+
+    except Exception as e:
+
+        print(
+            "Button update error:",
+            e
+        )
+
 
 # =========================================================
-# PREVIOUS
+# UPDATE BUTTONS
 # =========================================================
 
-async def previous_question(
+async def update_answer_buttons(
     query,
     context
 ):
 
-    mock = get_mock(context)
-
-    if not mock:
-        return
-
-    current = mock["current"]
-
-    if current <= 0:
-
-        await query.answer(
-            "यह पहला प्रश्न है।"
-        )
-
-        return
-
-    previous_index = current - 1
-
-    if get_section(previous_index) != get_section(current):
-
-        # Do not reset section timer when going backward
-        pass
-
-    mock["current"] = previous_index
-
-    await query.answer()
-
-    await show_question(
-        query,
-        context
+    answers = context.user_data.get(
+        "answers",
+        {}
     )
-
-
-# =========================================================
-# MARK
-# =========================================================
-
-async def mark_question(
-    query,
-    context
-):
-
-    mock = get_mock(context)
-
-    if not mock:
-        return
-
-    current = mock["current"]
-
-    if current in mock["marked"]:
-
-        mock["marked"].remove(
-            current
-        )
-
-        await query.answer(
-            "Review हटाया गया"
-        )
-
-    else:
-
-        mock["marked"].add(
-            current
-        )
-
-        await query.answer(
-            "Question marked 🔖"
-        )
-
-    await show_question(
-        query,
-        context
-    )
-
-
-# =========================================================
-# QUESTION PALETTE
-# =========================================================
-
-def palette_keyboard(mock):
 
     rows = []
 
-    for start in range(
-        0,
-        100,
-        10
-    ):
+    # Determine whether this message
+    # belongs to section 1 or section 2.
+    first_index = (
+        0
+        if query.message.message_id
+        else 0
+    )
+
+    # We identify based on callback/message
+    # by checking stored section messages.
+    section = context.user_data.get(
+        "last_section",
+        None
+    )
+
+    # Telegram callback itself contains
+    # the selected question, so simply
+    # recreate both possible ranges.
+    #
+    # To avoid changing message text,
+    # only answer buttons are rebuilt.
+
+    # Find selected question from callback
+    data = query.data.split(":")
+
+    q_index = int(data[1])
+
+    if q_index < 13:
+
+        start = 0
+        end = 13
+
+    else:
+
+        start = 13
+        end = 25
+
+    for i in range(start, end):
 
         row = []
 
-        for i in range(
-            start,
-            min(start + 10, 100)
-        ):
+        for j in range(4):
 
-            if i == mock["current"]:
+            selected = (
+                answers.get(str(i))
+                == j
+            )
 
-                text = f"🔵 {i + 1}"
-
-            elif i in mock["marked"]:
-
-                text = f"🟠 {i + 1}"
-
-            elif i in mock["answers"]:
-
-                text = f"🟢 {i + 1}"
-
-            else:
-
-                text = f"{i + 1}"
+            prefix = "🔘" if selected else "○"
 
             row.append(
                 InlineKeyboardButton(
-                    text,
-                    callback_data=f"goto:{i}"
+                    prefix,
+                    callback_data=f"a:{i}:{j}"
                 )
             )
 
         rows.append(row)
 
-    rows.append([
-        InlineKeyboardButton(
-            "❌ Close",
-            callback_data="close_palette"
-        )
-    ])
+    if start == 13:
 
-    return InlineKeyboardMarkup(
-        rows
-    )
+        rows.append([
 
+            InlineKeyboardButton(
+                "🏁 SUBMIT TEST",
+                callback_data="submit"
+            )
 
-async def show_palette(
-    query,
-    context
-):
-
-    mock = get_mock(context)
-
-    if not mock:
-        return
-
-    answered = len(
-        mock["answers"]
-    )
-
-    marked = len(
-        mock["marked"]
-    )
-
-    text = (
-        "☷ <b>Question Palette</b>\n\n"
-
-        "🔵 Current\n"
-        "🟢 Answered\n"
-        "🟠 Marked\n"
-        "⚪ Not Visited\n\n"
-
-        f"✅ Answered: {answered}/100\n"
-        f"🔖 Marked: {marked}\n\n"
-
-        "किसी भी question number पर tap करके "
-        "सीधे उस question पर जाएँ।"
-    )
-
-    await query.answer()
-
-    await query.edit_message_text(
-        text,
-        parse_mode="HTML",
-        reply_markup=palette_keyboard(mock)
-    )
-
-
-# =========================================================
-# GOTO QUESTION
-# =========================================================
-
-async def goto_question(
-    query,
-    context
-):
-
-    mock = get_mock(context)
-
-    if not mock:
-        return
+        ])
 
     try:
 
-        index = int(
-            query.data.split(":")[1]
+        await query.edit_message_reply_markup(
+            reply_markup=InlineKeyboardMarkup(rows)
         )
 
-    except:
+    except Exception as e:
 
-        return
-
-    if index < 0 or index >= 100:
-        return
-
-    mock["current"] = index
-
-    await query.answer(
-        f"Question {index + 1}"
-    )
-
-    await show_question(
-        query,
-        context
-    )
-
-
-# =========================================================
-# CLOSE PALETTE
-# =========================================================
-
-async def close_palette(
-    query,
-    context
-):
-
-    await query.answer()
-
-    await show_question(
-        query,
-        context
-    )
-
-
-# =========================================================
-# SUBMIT CONFIRM
-# =========================================================
-
-async def submit_confirm(
-    query,
-    context
-):
-
-    mock = get_mock(context)
-
-    if not mock:
-        return
-
-    answered = len(
-        mock["answers"]
-    )
-
-    marked = len(
-        mock["marked"]
-    )
-
-    unanswered = (
-        100 - answered
-    )
-
-    text = (
-        "🏁 <b>Submit Test?</b>\n\n"
-
-        f"✅ Attempted: <b>{answered}</b>\n"
-        f"⚪ Unattempted: <b>{unanswered}</b>\n"
-        f"🔖 Marked: <b>{marked}</b>\n\n"
-
-        "क्या आप test submit करना चाहते हैं?"
-    )
-
-    keyboard = InlineKeyboardMarkup([
-
-        [
-            InlineKeyboardButton(
-                "✅ Submit",
-                callback_data="submit_final"
-            ),
-
-            InlineKeyboardButton(
-                "❌ Continue Test",
-                callback_data="continue_test"
-            )
-        ]
-
-    ])
-
-    await query.answer()
-
-    await query.edit_message_text(
-        text,
-        parse_mode="HTML",
-        reply_markup=keyboard
-    )
+        print(
+            "Reply markup error:",
+            e
+        )
 
 
 # =========================================================
 # SUBMIT
 # =========================================================
 
-async def finish_mock(
+async def submit_test(
     query,
     context
 ):
 
-    mock = get_mock(context)
+    await finish_test(
+        query,
+        context
+    )
 
-    if not mock:
+
+# =========================================================
+# FINISH TEST
+# =========================================================
+
+async def finish_test(
+    query,
+    context
+):
+
+    if context.user_data.get(
+        "finished",
+        False
+    ):
+
+        await query.answer(
+            "Test already submitted."
+        )
+
         return
 
-    if mock["finished"]:
+    questions = context.user_data.get(
+        "test_questions"
+    )
+
+    answers = context.user_data.get(
+        "answers",
+        {}
+    )
+
+    if not questions:
+
+        await query.answer(
+            "Test data not found."
+        )
+
         return
 
-    mock["finished"] = True
+    context.user_data[
+        "finished"
+    ] = True
+
+    time_taken = int(
+        time.time()
+        - context.user_data.get(
+            "test_start",
+            time.time()
+        )
+    )
+
+    if time_taken > TEST_TIME:
+        time_taken = TEST_TIME
 
     correct = 0
     wrong = 0
     skipped = 0
 
-    questions = mock["questions"]
-
     for i, q in enumerate(questions):
 
-        if i not in mock["answers"]:
+        selected = answers.get(
+            str(i)
+        )
+
+        if selected is None:
 
             skipped += 1
 
-            continue
-
-        selected = mock["answers"][i]
-
-        if selected == q["answer"]:
+        elif selected == q["answer"]:
 
             correct += 1
 
         else:
 
             wrong += 1
+
+    score = (
+        correct * MARKS_CORRECT
+        - wrong * NEGATIVE_MARK
+    )
+
+    attempted = (
+        correct + wrong
+    )
+
+    accuracy = 0
+
+    if attempted:
+
+        accuracy = (
+            correct
+            / attempted
+            * 100
+        )
+
+    user = query.from_user
+
+    save_user(user)
+
+    conn = get_db()
+
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO attempts
+        (
+            user_id,
+            score,
+            correct,
+            wrong,
+            skipped,
+            accuracy,
+            time_taken,
+            created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        user.id,
+        score,
+        correct,
+        wrong,
+        skipped,
+        accuracy,
+        time_taken,
+        int(time.time())
+    ))
+
+    attempt_id = cur.lastrowid
+
+    conn.commit()
+
+    # Ranking
+    cur.execute("""
+        SELECT COUNT(*)
+        FROM attempts
+        WHERE score > ?
+        OR (
+            score = ?
+            AND time_taken < ?
+        )
+    """, (
+        score,
+        score,
+        time_taken
+    ))
+
+    better = cur.fetchone()[0]
+
+    rank = better + 1
+
+    cur.execute(
+        "SELECT COUNT(*) FROM attempts"
+    )
+
+    participants = cur.fetchone()[0]
+
+    conn.commit()
+    conn.close()
+
+    minutes = time_taken // 60
+    seconds = time_taken % 60
+
+    result_text = f"""
+🏆 TEST COMPLETED
+
+🎯 {TEST_NAME}
+
+━━━━━━━━━━━━━━━━━━
+
+📊 SCORE
+{score:.2f} / 50
+
+✅ Correct: {correct}
+❌ Wrong: {wrong}
+⏭️ Skipped: {skipped}
+
+🎯 Accuracy: {accuracy:.2f}%
+
+⏱️ Time Taken:
+{minutes:02d}:{seconds:02d}
+
+━━━━━━━━━━━━━━━━━━
+
+🏅 Rank: #{rank}
+👥 Participants: {participants}
+"""
+
+    keyboard = InlineKeyboardMarkup([
+
+        [
+            InlineKeyboardButton(
+                "🔄 New Test",
+                callback_data="start_test"
+            )
+        ],
+
+        [
+            InlineKeyboardButton(
+                "🏆 Ranking",
+                callback_data="ranking"
+            ),
+
+            InlineKeyboardButton(
+                "📊 My Result",
+                callback_data="my_result"
+            )
+        ],
+
+        [
+            InlineKeyboardButton(
+                "🏠 Home",
+                callback_data="home"
+            )
+        ]
+
+    ])
+
+    await query.message.reply_text(
+        result_text,
+        reply_markup=keyboard
+    )
+
+
+# =========================================================
+# RANKING
+# =========================================================
+
+async def ranking(
+    query,
+    context
+):
+
+    conn = get_db()
+
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT
+            a.user_id,
+            a.score,
+            a.time_taken,
+            u.first_name,
+            u.username
+        FROM attempts a
+        LEFT JOIN users u
+        ON a.user_id = u.user_id
+        ORDER BY
+            a.score DESC,
+            a.time_taken ASC,
+            a.created_at ASC
+        LIMIT 10
+    """)
+
+    rows = cur.fetchall()
+
+    conn.close()
+
+    text = """
+🏆 TOP 10 RANKING
+
+━━━━━━━━━━━━━━━━━━
+"""
+
+    if not rows:
+
+        text += "\nअभी कोई attempt नहीं है।"
+
+    else:
+
+        for i, row in enumerate(
+            rows,
+            start=1
+        ):
+
+            name = (
+                row["first_name"]
+                or row["username"]
+                or "User"
+            )
+
+            minutes = (
+                row["time_taken"]
+                // 60
+            )
+
+            seconds = (
+                row["time_taken"]
+                % 60
+            )
+
+            text += (
+                f"\n{i}. {name}\n"
+                f"   🎯 {row['score']:.2f}"
+                f" | ⏱️ {minutes:02d}:{seconds:02d}\n"
+            )
+
+    keyboard = InlineKeyboardMarkup([
+
+        [
+            InlineKeyboardButton(
+                "🏠 Home",
+                callback_data="home"
+            )
+        ]
+
+    ])
+
+    await query.edit_message_text(
+        text,
+        reply_markup=keyboard
+    )
+
+
+# =========================================================
+# MY RESULT
+# =========================================================
+
+async def my_result(
+    query,
+    context
+):
+
+    user_id = query.from_user.id
+
+    conn = get_db()
+
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT *
+        FROM attempts
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+        LIMIT 1
+    """, (
+        user_id,
+    ))
+
+    row = cur.fetchone()
+
+    cur.execute("""
+        SELECT
+            MAX(score) AS best_score,
+            COUNT(*) AS attempts
+        FROM attempts
+        WHERE user_id = ?
+    """, (
+        user_id,
+    ))
+
+    stats = cur.fetchone()
+
+    conn.close()
+
+    if not row:
+
+        text = """
+📊 MY RESULT
+
+अभी आपने कोई test नहीं दिया है।
+"""
+
+    else:
+
+        text = f"""
+📊 MY RESULT
+
+━━━━━━━━━━━━━━━━━━
+
+Latest Score:
+🎯 {row['score']:.2f}/50
+
+✅ Correct: {row['correct']}
+❌ Wrong: {row['wrong']}
+⏭️ Skipped: {row['skipped']}
+
+🎯 Accuracy:
+{row['accuracy']:.2f}%
+
+⏱️ Time:
+{row['time_taken'] // 60:02d}:
+{row['time_taken'] % 60:02d}
+
+━━━━━━━━━━━━━━━━━━
+
+🏆 Best Score:
+{stats['best_score']:.2f}
+
+📝 Total Attempts:
+{stats['attempts']}
+"""
+
+    keyboard = InlineKeyboardMarkup([
+
+        [
+            InlineKeyboardButton(
+                "🏠 Home",
+                callback_data="home"
+            )
+        ]
+
+    ])
+
+    await query.edit_message_text(
+        text,
+        reply_markup=keyboard
+    )
+
+
+# =========================================================
+# HOME CALLBACK
+# =========================================================
+
+async def home(
+    query,
+    context
+):
+
+    await query.edit_message_text(
+        f"""
+🎯 {TEST_NAME}
+
+25 Random Questions
+⏱️ 20 Minutes
+❌ Negative Marking: 0.50
+
+👇 Choose an option
+""",
+        reply_markup=home_keyboard()
+    )
+
+
+# =========================================================
+# CALLBACK ROUTER
+# =========================================================
+
+async def callback_handler(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    query = update.callback_query
+
+    await query.answer()
+
+    data = query.data
+
+    save_user(
+        query.from_user
+    )
+
+    if data == "home":
+
+        await home(
+            query,
+            context
+        )
+
+    elif data == "start_test":
+
+        await start_test(
+            query,
+            context
+        )
+
+    elif data == "submit":
+
+        await submit_test(
+            query,
+            context
+        )
+
+    elif data == "ranking":
+
+        await ranking(
+            query,
+            context
+        )
+
+    elif data == "my_result":
+
+        await my_result(
+            query,
+            context
+        )
+
+    elif data.startswith("a:"):
+
+        parts = data.split(":")
+
+        question_index = int(
+            parts[1]
+        )
+
+        option_index = int(
+            parts[2]
+        )
+
+        await answer_click(
+            query,
+            context,
+            question_index,
+            option_index
+        )
+
+
+# =========================================================
+# RUN BOT
+# =========================================================
+
+def main():
+
+    if not TOKEN:
+
+        raise RuntimeError(
+            "BOT_TOKEN environment variable missing."
+        )
+
+    application = (
+        Application.builder()
+        .token(TOKEN)
+        .build()
+    )
+
+    application.add_handler(
+        CommandHandler(
+            "start",
+            start
+        )
+    )
+
+    application.add_handler(
+        CallbackQueryHandler(
+            callback_handler
+        )
+    )
+
+    print(
+        "UPSSCC PET Mock Bot started..."
+    )
+
+    application.run_polling(
+        drop_pending_updates=True
+    )
+
+
 if __name__ == "__main__":
+
     main()
-   
